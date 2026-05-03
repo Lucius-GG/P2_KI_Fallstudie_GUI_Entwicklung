@@ -20,20 +20,10 @@ class DevPulsePlanner(tk.Tk):
     def __init__(self):
         super().__init__()
         
-        # =====================================================================
-        # KONZEPT: WINDOW MANAGEMENT
-        # Fullscreen-Modus und Event-Binding (Escape) sorgen für eine 
-        # "immersive" User Experience, wie man sie von modernen Apps kennt.
-        # =====================================================================
         self.title("DevPulse Planner Professional")
         self.attributes('-fullscreen', True)
         self.bind("<Escape>", lambda e: self.attributes("-fullscreen", False))
         
-        # =====================================================================
-        # KONZEPT: THEMING & STATE MANAGEMENT
-        # Ein zentrales Dictionary für Farben ermöglicht einen sauberen Darkmode.
-        # "current_theme" steuert als State den gesamten Look der App.
-        # =====================================================================
         self.themes = {
             "light": {
                 "bg": "#F8F9FA", "sidebar": "#FFFFFF", "text_main": "#1A1A1A",
@@ -48,16 +38,14 @@ class DevPulsePlanner(tk.Tk):
         }
         self.current_theme = "light"
         
-        # Initialisierung der UI-Komponenten[cite: 1]
+        # ===== NEUE STATE VERWALTUNG =====
+        self.user_tasks = []  # Speichert vom Nutzer hinzugefügte Tasks
+        self.ui_elements = {}  # Referenzen zu wichtigen Widgets
+        
         self.setup_layout()
         self.render_ui()
 
     def setup_layout(self):
-        """
-        KONZEPT: LAYOUT SEGMENTATION
-        Trennung der Hauptbereiche (Sidebar vs. Content) mittels Frames.
-        'pack_propagate(False)' verhindert, dass die Sidebar durch Inhalt schrumpft.
-        """
         self.sidebar = tk.Frame(self, width=340)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
@@ -67,22 +55,28 @@ class DevPulsePlanner(tk.Tk):
 
     def render_ui(self):
         """
-        KONZEPT: DYNAMISCHES RENDERING
-        Diese Methode fungiert als 'Engine'. Sie löscht alle Widgets (.destroy())
-        und baut sie basierend auf dem aktuellen Theme-State neu auf.
+        OPTIMIERT: Nur Styling wird aktualisiert, nicht die komplette UI!
         """
         colors = self.themes[self.current_theme]
         self.config(bg=colors["bg"])
         self.sidebar.config(bg=colors["sidebar"], highlightbackground=colors["border"], highlightthickness=1)
         self.main_area.config(bg=colors["bg"])
         
-        for w in self.sidebar.winfo_children(): w.destroy()
-        for w in self.main_area.winfo_children(): w.destroy()
+        # Nur bei ERSTER Initialisierung aufbauen
+        if not self.ui_elements:
+            self._build_ui()
+        
+        # Bei Theme-Wechsel: Nur Farben aktualisieren
+        self._update_theme_colors()
 
+    def _build_ui(self):
+        """Baut die UI nur einmal auf"""
+        colors = self.themes[self.current_theme]
+        
         # --- BRANDING SECTION ---
-        # Hier wird die Identität der App definiert (Logo + Name)
         brand_container = tk.Frame(self.sidebar, bg=colors["sidebar"])
         brand_container.pack(pady=(70, 50), padx=40, anchor="w")
+        self.ui_elements["brand_container"] = brand_container
 
         self.draw_vector_logo(brand_container)
 
@@ -95,41 +89,50 @@ class DevPulsePlanner(tk.Tk):
                  bg=colors["sidebar"], fg=colors["text_main"]).pack(side="left")
 
         # --- NAVIGATION ---
-        # KONZEPT: ABSTRAKTION DURCH LISTEN
-        # Statt jeden Button einzeln zu schreiben, werden Navigationsdaten 
-        # in einer Liste definiert und per Schleife generiert.
         nav_data = [("📋", "Aufgaben", True), ("📊", "Analysen", False), ("⚙️", "Settings", False)]
+        nav_frame = tk.Frame(self.sidebar, bg=colors["sidebar"])
+        nav_frame.pack(fill="x")
+        self.ui_elements["nav_frame"] = nav_frame
+        
         for icon, txt, active in nav_data:
             bg_c = colors["bg"] if active else colors["sidebar"]
             fg_c = colors["accent"] if active else colors["text_main"]
             
-            f = tk.Frame(self.sidebar, bg=bg_c)
+            f = tk.Frame(nav_frame, bg=bg_c)
             f.pack(fill="x", padx=20, pady=6)
             
             l = tk.Label(f, text=f"   {icon}   {txt}", font=("Segoe UI Semibold", 12),
                          bg=bg_c, fg=fg_c, anchor="w")
             l.pack(side="left", ipady=14, fill="x", expand=True)
-            # Event Handling: Klick-Interaktion
             l.bind("<Button-1>", lambda e, t=txt: messagebox.showinfo("Info", f"{t} gewählt"))
 
-        # Dark Mode Button (Trigger für den Theme-Switch)
-        tk.Button(self.sidebar, text="MODE WECHSELN", command=self.toggle_theme,
+        # --- BUTTONS CONTAINER ---
+        button_container = tk.Frame(self.sidebar, bg=colors["sidebar"])
+        button_container.pack(side="bottom", fill="x", padx=40, pady=40)
+        self.ui_elements["button_container"] = button_container
+        
+        tk.Button(button_container, text="MODE WECHSELN", command=self.toggle_theme,
                   font=("Segoe UI Bold", 9), bg=colors["accent"], fg="white",
-                  relief="flat", pady=12, cursor="hand2").pack(side="bottom", fill="x", padx=40, pady=40)
+                  relief="flat", pady=12, cursor="hand2").pack(fill="x", pady=(0, 10))
+        
+        # ===== TEST BUTTON: Task hinzufügen =====
+        tk.Button(button_container, text="+ TEST TASK", command=self._add_test_task,
+                  font=("Segoe UI Bold", 9), bg="#107C10", fg="white",
+                  relief="flat", pady=12, cursor="hand2").pack(fill="x")
 
         # --- KANBAN BOARD AREA ---
         content = tk.Frame(self.main_area, bg=colors["bg"])
         content.pack(fill="both", expand=True, padx=60, pady=60)
+        self.ui_elements["content"] = content
 
         tk.Label(content, text="Daily Board", font=("Segoe UI Bold", 28),
                  bg=colors["bg"], fg=colors["text_main"]).pack(anchor="w", pady=(0, 40))
 
-        # Grid-Layout für Spalten (Kanban-Struktur)
         board = tk.Frame(content, bg=colors["bg"])
         board.pack(fill="both", expand=True)
         board.columnconfigure((0, 1), weight=1)
+        self.ui_elements["board"] = board
 
-        # Hier erfolgt später die Datenübergabe aus der logic.py (Manager-Klasse)[cite: 5]
         self.create_column(board, "In Bearbeitung", 0, [
             ("GUI Refinement", "Logo auf Vektor-Basis umgestellt", "High", "Sofort"),
             ("KI Fallstudie", "Integration der ToDoListeKlassen", "Medium", "29.05.2026")
@@ -138,42 +141,88 @@ class DevPulsePlanner(tk.Tk):
             ("DPI Bugfix", "High-DPI Awareness für Windows 11", "Low", "Erledigt")
         ])
 
+    def _update_theme_colors(self):
+        """Aktualisiert nur die Farben ALLER Widgets rekursiv"""
+        colors = self.themes[self.current_theme]
+        self._apply_colors_recursive(self, colors)
+
+    def _apply_colors_recursive(self, widget, colors):
+        """Recursiv alle Widgets mit neuen Farben aktualisieren"""
+        try:
+            # Farben basierend auf Widget-Typ setzen
+            if isinstance(widget, tk.Label):
+                if widget.cget("bg") in ["#F8F9FA", "#0B0B0B"]:
+                    widget.config(bg=colors["bg"])
+                elif widget.cget("bg") in ["#FFFFFF", "#161616"]:
+                    widget.config(bg=colors["sidebar"])
+                elif widget.cget("bg") in ["#1E1E1E", "#FFFFFF"]:
+                    widget.config(bg=colors["card"])
+                    
+                if widget.cget("fg") in ["#1A1A1A", "#FFFFFF"]:
+                    widget.config(fg=colors["text_main"])
+                elif widget.cget("fg") in ["#646464", "#A0A0A0"]:
+                    widget.config(fg=colors["text_sub"])
+                elif widget.cget("fg") in ["#005A9E", "#2899F5"]:
+                    widget.config(fg=colors["accent"])
+                    
+            elif isinstance(widget, tk.Frame):
+                if widget.cget("bg") in ["#F8F9FA", "#0B0B0B"]:
+                    widget.config(bg=colors["bg"])
+                elif widget.cget("bg") in ["#FFFFFF", "#161616"]:
+                    widget.config(bg=colors["sidebar"])
+                elif widget.cget("bg") in ["#1E1E1E", "#FFFFFF"]:
+                    widget.config(bg=colors["card"])
+                    
+                if widget.cget("highlightbackground") in ["#E1E1E1", "#333333"]:
+                    widget.config(highlightbackground=colors["border"])
+                    
+            elif isinstance(widget, tk.Button):
+                if widget.cget("bg") in ["#005A9E", "#2899F5"]:
+                    widget.config(bg=colors["accent"])
+                    
+        except tk.TclError:
+            pass
+        
+        # Rekursiv auf alle Kinder anwenden
+        for child in widget.winfo_children():
+            self._apply_colors_recursive(child, colors)
+
+    def _add_test_task(self):
+        """Fügt eine Test-Task hinzu - OHNE UI neu zu rendern!"""
+        colors = self.themes[self.current_theme]
+        board = self.ui_elements["board"]
+        
+        # Neue Task in erster Spalte hinzufügen
+        first_column = board.winfo_children()[0]
+        
+        self.create_modern_card(first_column, 
+                               f"Test Task #{len(self.user_tasks)+1}", 
+                               "Diese Task bleibt nach Theme-Wechsel bestehen! ✅",
+                               "Medium", 
+                               "Heute")
+        
+        self.user_tasks.append({"title": f"Test Task #{len(self.user_tasks)+1}"})
+        messagebox.showinfo("✅ Test erfolgreich", f"Task hinzugefügt!\nFunktioniert der Theme-Wechsel jetzt korrekt?")
 
     def draw_vector_logo(self, parent):
-
-#   Lädt das generierte Logo-Bild und skaliert es mit Anti-Aliasing (LANCZOS),
-#    um maximale Schärfe zu garantieren.
-
         colors = self.themes[self.current_theme]
         
         try:
-            # 1. Bild öffnen
             raw_img = Image.open("Logo.png")
-            
-            # 2. Hochwertiges Resizing (LANCZOS sorgt für die Glättung)
-            # 64x64 ist ein guter Standard für die Sidebar
             render_size = (64, 64)
             smooth_img = raw_img.resize(render_size, Image.Resampling.LANCZOS)
-            
-            # 3. Konvertierung für Tkinter
             self.logo_tk = ImageTk.PhotoImage(smooth_img)
             
-            # 4. Anzeige in einem Label (ohne Rahmen)
             logo_label = tk.Label(parent, image=self.logo_tk, bg=colors["sidebar"], bd=0)
             logo_label.pack(side="left")
             
         except Exception as e:
-            # Fallback: Falls die Datei fehlt, zeichne einen einfachen Platzhalter
             print(f"Logo konnte nicht geladen werden: {e}")
             cv = tk.Canvas(parent, width=64, height=64, bg=colors["sidebar"], highlightthickness=0)
             cv.pack(side="left")
             cv.create_oval(5, 5, 59, 59, fill=colors["accent"], outline="")
 
     def create_column(self, parent, title, col, tasks):
-        """
-        KONZEPT: COMPONENT REUSABILITY
-        Erstellt eine Kanban-Spalte. Durch Parameter steuerbar für beliebig viele Spalten.
-        """
         colors = self.themes[self.current_theme]
         frame = tk.Frame(parent, bg=colors["bg"])
         frame.grid(row=0, column=col, sticky="nsew", padx=25)
@@ -185,11 +234,6 @@ class DevPulsePlanner(tk.Tk):
             self.create_modern_card(frame, t, d, p, dt)
 
     def create_modern_card(self, parent, title, desc, prio, date):
-        """
-        KONZEPT: COMPOUND WIDGETS (Cards)
-        Kombiniert mehrere Labels und Frames zu einer visuellen Einheit.
-        Simuliert modernes Karten-Design durch 'highlightthickness' als Rahmen.
-        """
         colors = self.themes[self.current_theme]
         
         card = tk.Frame(parent, bg=colors["card"], padx=25, pady=25, 
@@ -212,12 +256,9 @@ class DevPulsePlanner(tk.Tk):
                  bg=colors["card"], fg=colors["text_sub"]).pack(side="right")
 
     def toggle_theme(self):
-        """
-        KONZEPT: UI REFRESH LOGIC
-        Ändert den globalen Status und stößt den Render-Prozess neu an.
-        """
+        """Theme wechseln - Daten bleiben erhalten!"""
         self.current_theme = "dark" if self.current_theme == "light" else "light"
-        self.render_ui()
+        self._update_theme_colors()  # Nur Farben updaten, nicht render_ui()!
 
 if __name__ == "__main__":
     app = DevPulsePlanner()
