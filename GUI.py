@@ -261,7 +261,7 @@ class DevPulsePlanner(tk.Tk):
         self._build_sidebar_buttons(btn_frame)
 
         # ── MAIN AREA: TopBar ────────────────────────────────────────────────
-        topbar = tk.Frame(self.main_area, bg=colors["topbar"], height=56)
+        topbar = tk.Frame(self.main_area, bg=colors["topbar"], height=72)
         topbar.pack(fill="x")
         topbar.pack_propagate(False)
         self.ui_elements["topbar"] = topbar
@@ -272,8 +272,13 @@ class DevPulsePlanner(tk.Tk):
         board_outer.pack(fill="both", expand=True)
         self.ui_elements["board_outer"] = board_outer
 
-        board_header = tk.Frame(board_outer, bg=colors["bg"])
-        board_header.pack(fill="x", padx=28, pady=(20, 0))
+        board_padding = 16
+
+        board_header_outer = tk.Frame(board_outer, bg=colors["bg"])
+        board_header_outer.pack(fill="x", padx=board_padding, pady=(20, 0))
+
+        board_header = tk.Frame(board_header_outer, bg=colors["bg"])
+        board_header.pack(fill="x")
 
         tk.Label(board_header, text="Sprint Board",
                  font=("Segoe UI Black", 20), bg=colors["bg"],
@@ -286,13 +291,11 @@ class DevPulsePlanner(tk.Tk):
         date_lbl.pack(side="right", pady=6)
         self.ui_elements["date_lbl"] = date_lbl
 
-        # Trennlinie
         tk.Frame(board_outer, bg=colors["border"], height=1).pack(
-            fill="x", padx=28, pady=(10, 0))
+            fill="x", padx=board_padding, pady=(8, 10))
 
-        # Spalten-Container (3 Spalten)
         cols_frame = tk.Frame(board_outer, bg=colors["bg"])
-        cols_frame.pack(fill="both", expand=True, padx=16, pady=16)
+        cols_frame.pack(fill="both", expand=True, padx=board_padding, pady=16)
         cols_frame.columnconfigure((0, 1, 2), weight=1, uniform="col")
         cols_frame.rowconfigure(0, weight=1)
         self.ui_elements["cols_frame"] = cols_frame
@@ -408,7 +411,7 @@ class DevPulsePlanner(tk.Tk):
         tk.Label(topbar, text="Sprint Board",
                  font=("Segoe UI Semibold", 12),
                  bg=colors["topbar"], fg="#FFFFFF").pack(
-                 side="left", padx=24, pady=18)
+                 side="left", padx=16, pady=18)
 
         # Rechte Seite: Quick-Action-Knöpfe
         right = tk.Frame(topbar, bg=colors["topbar"])
@@ -474,52 +477,53 @@ class DevPulsePlanner(tk.Tk):
         ]
 
         for col_idx, (title, tasks, col_bg, badge_color) in enumerate(columns):
-            self._create_column(cols_frame, title, col_idx, tasks, col_bg, badge_color)
+            if col_idx < 2:
+                grid_padx = (0, 8)
+            else:
+                grid_padx = (0, 0)
 
-    def _create_column(self, parent, title, col, tasks, col_bg, badge_color):
-        colors = self.themes[self.current_theme]
+            wrapper = tk.Frame(cols_frame, bg=col_bg,
+                               highlightbackground=colors["border"],
+                               highlightthickness=1)
+            wrapper.grid(row=0, column=col_idx, sticky="nsew",
+                         padx=grid_padx, pady=4)
 
-        wrapper = tk.Frame(parent, bg=col_bg,
-                           highlightbackground=colors["border"],
-                           highlightthickness=1)
-        wrapper.grid(row=0, column=col, sticky="nsew", padx=8, pady=4)
+            # Spalten-Header
+            header = tk.Frame(wrapper, bg=col_bg, padx=14, pady=12)
+            header.pack(fill="x")
 
-        # Spalten-Header
-        header = tk.Frame(wrapper, bg=col_bg, padx=14, pady=12)
-        header.pack(fill="x")
+            tk.Label(header, text=title, font=self.FONT_HEAD,
+                     bg=col_bg, fg=colors["text_main"]).pack(side="left")
 
-        tk.Label(header, text=title, font=self.FONT_HEAD,
-                 bg=col_bg, fg=colors["text_main"]).pack(side="left")
-
-        badge = tk.Label(header, text=str(len(tasks)),
+            badge = tk.Label(header, text=str(len(tasks)),
                          font=self.FONT_BADGE, bg=badge_color,
                          fg="#FFFFFF", padx=7, pady=2)
-        badge.pack(side="right")
+            badge.pack(side="right")
 
-        tk.Frame(wrapper, bg=colors["border"], height=1).pack(fill="x", padx=10)
+            tk.Frame(wrapper, bg=colors["border"], height=1).pack(fill="x", padx=10)
 
-        # Scrollbarer Kartenbereich
-        scroll = ScrollableFrame(wrapper, bg=col_bg)
-        scroll.pack(fill="both", expand=True, padx=0, pady=0)
+            # Scrollbarer Kartenbereich
+            scroll = ScrollableFrame(wrapper, bg=col_bg)
+            scroll.pack(fill="both", expand=True, padx=0, pady=0)
 
-        if tasks:
-            for task in tasks:
-                prio_map = {1: "Low", 3: "Medium", 5: "High"}
-                prio = prio_map.get(
-                    task.get_prio() if hasattr(task, "get_prio") else 3, "Medium")
-                datum = "–"
-                if hasattr(task, "get_faelligkeitsdatum") and task.get_faelligkeitsdatum():
-                    datum = task.get_faelligkeitsdatum().strftime("%d.%m.%Y")
+            if tasks:
+                for task in tasks:
+                    prio_map = {1: "Low", 3: "Medium", 5: "High"}
+                    prio = prio_map.get(
+                        task.get_prio() if hasattr(task, "get_prio") else 3, "Medium")
+                    datum = "–"
+                    if hasattr(task, "get_faelligkeitsdatum") and task.get_faelligkeitsdatum():
+                        datum = task.get_faelligkeitsdatum().strftime("%d.%m.%Y")
 
-                self._create_card(scroll.inner, task.get_titel(),
+                    self._create_card(scroll.inner, task.get_titel(),
                                   task.get_beschreibung(), prio,
                                   datum, task.get_id(), col_bg)
-        else:
-            empty = tk.Frame(scroll.inner, bg=col_bg)
-            empty.pack(fill="x", padx=14, pady=30)
-            tk.Label(empty, text="🗒", font=("Segoe UI", 28),
+            else:
+                empty = tk.Frame(scroll.inner, bg=col_bg)
+                empty.pack(fill="x", padx=14, pady=30)
+                tk.Label(empty, text="🗒", font=("Segoe UI", 28),
                      bg=col_bg, fg=colors["text_sub"]).pack()
-            tk.Label(empty, text="Keine Aufgaben",
+                tk.Label(empty, text="Keine Aufgaben",
                      font=self.FONT_SMALL, bg=col_bg,
                      fg=colors["text_sub"]).pack(pady=(4, 0))
 
