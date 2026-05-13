@@ -1,4 +1,3 @@
-
 import tkinter as tk
 import ctypes
 from datetime import datetime
@@ -18,38 +17,160 @@ except Exception:
 
 
 # =============================================================================
-# CUSTOM SCROLLABLE FRAME
+# CUSTOM SCROLLABLE FRAME MIT EIGENER CANVAS-SCROLLBAR
 # =============================================================================
 class ScrollableFrame(tk.Frame):
-    """Ein Frame mit vertikalem Scrollbalken."""
+    """ScrollableFrame mit komplett selbst gezeichneter Scrollbar.
 
-    def __init__(self, parent, bg, **kwargs):
+    Warum nicht tk.Scrollbar?
+    - Die native Windows/Tk-Scrollbar ignoriert je nach Theme oft bg/troughcolor.
+    - Deshalb wird die Scrollbar hier per Canvas gezeichnet.
+    - Ergebnis: Dark Theme bleibt wirklich dunkel.
+    """
+
+    def __init__(
+        self,
+        parent,
+        bg,
+        scrollbar_bg="#C8CDD3",
+        scrollbar_trough="#F3F4F6",
+        scrollbar_active="#AEB4BD",
+        scrollbar_width=12,
+        **kwargs,
+    ):
         super().__init__(parent, bg=bg, **kwargs)
+
+        self.bg = bg
+        self.scrollbar_bg = scrollbar_bg
+        self.scrollbar_trough = scrollbar_trough
+        self.scrollbar_active = scrollbar_active
+        self.scrollbar_width = scrollbar_width
+        self._scrollbar_dragging = False
+        self._scrollbar_drag_offset = 0
+        self._last_scroll = (0.0, 1.0)
+
         self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
-        self.scrollbar = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.inner = tk.Frame(self.canvas, bg=bg)
+        self.scrollbar_canvas = tk.Canvas(
+            self,
+            width=scrollbar_width,
+            bg=scrollbar_trough,
+            highlightthickness=0,
+            bd=0,
+            cursor="hand2",
+        )
 
         self.canvas_window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.configure(yscrollcommand=self._on_canvas_scroll)
 
         self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        self.scrollbar_canvas.pack(side="right", fill="y")
 
         self.inner.bind("<Configure>", self._on_inner_configure)
         self.canvas.bind("<Configure>", self._on_canvas_resize)
-        self.canvas.bind("<Enter>", lambda e: self.canvas.bind_all("<MouseWheel>", self._on_mousewheel))
-        self.canvas.bind("<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>"))
+        self.canvas.bind("<Enter>", lambda event: self.canvas.bind_all("<MouseWheel>", self._on_mousewheel))
+        self.canvas.bind("<Leave>", lambda event: self.canvas.unbind_all("<MouseWheel>"))
+
+        self.scrollbar_canvas.bind("<ButtonPress-1>", self._on_scrollbar_press)
+        self.scrollbar_canvas.bind("<B1-Motion>", self._on_scrollbar_drag)
+        self.scrollbar_canvas.bind("<ButtonRelease-1>", self._on_scrollbar_release)
+        self.scrollbar_canvas.bind("<Enter>", self._on_scrollbar_enter)
+        self.scrollbar_canvas.bind("<Leave>", self._on_scrollbar_leave)
 
     def _on_canvas_resize(self, event):
         self.canvas.itemconfig(self.canvas_window, width=event.width)
+        self._draw_scrollbar(*self._last_scroll)
 
     def _on_inner_configure(self, event=None):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+        self._draw_scrollbar(*self._last_scroll)
+
+    def _on_canvas_scroll(self, first, last):
+        first = float(first)
+        last = float(last)
+        self._last_scroll = (first, last)
+        self._update_scrollbar_visibility()
+        self._draw_scrollbar(first, last)
+
+    def _update_scrollbar_visibility(self):
         bbox = self.canvas.bbox("all")
-        if bbox and bbox[3] > self.canvas.winfo_height():
-            self.scrollbar.pack(side="right", fill="y")
+        needs_scrollbar = bool(bbox and bbox[3] > self.canvas.winfo_height())
+        if needs_scrollbar:
+            if not self.scrollbar_canvas.winfo_ismapped():
+                self.scrollbar_canvas.pack(side="right", fill="y")
         else:
-            self.scrollbar.pack_forget()
+            if self.scrollbar_canvas.winfo_ismapped():
+                self.scrollbar_canvas.pack_forget()
+
+    def _draw_scrollbar(self, first=0.0, last=1.0, active=False):
+        self.scrollbar_canvas.delete("all")
+        height = max(self.scrollbar_canvas.winfo_height(), 1)
+        width = self.scrollbar_width
+
+        self.scrollbar_canvas.create_rectangle(0, 0, width, height, fill=self.scrollbar_trough, outline="")
+
+        if last - first >= 0.999:
+            return
+
+        min_thumb_height = 34
+        thumb_top = int(first * height)
+        thumb_bottom = int(last * height)
+        if thumb_bottom - thumb_top < min_thumb_height:
+            thumb_bottom = min(height, thumb_top + min_thumb_height)
+            if thumb_bottom == height:
+                thumb_top = max(0, height - min_thumb_height)
+
+        pad = 3
+        color = self.scrollbar_active if active or self._scrollbar_dragging else self.scrollbar_bg
+        self.scrollbar_canvas.create_rectangle(
+            pad,
+            thumb_top + 2,
+            width - pad,
+            thumb_bottom - 2,
+            fill=color,
+            outline="",
+        )
+        self._thumb_top = thumb_top
+        self._thumb_bottom = thumb_bottom
+
+    def _on_scrollbar_press(self, event):
+        height = max(self.scrollbar_canvas.winfo_height(), 1)
+        thumb_top = getattr(self, "_thumb_top", 0)
+        thumb_bottom = getattr(self, "_thumb_bottom", height)
+        if thumb_top <= event.y <= thumb_bottom:
+            self._scrollbar_dragging = True
+            self._scrollbar_drag_offset = event.y - thumb_top
+        else:
+            # Klick in die Spur: sofort zur Position springen.
+            first, last = self._last_scroll
+            page = last - first
+            target = max(0.0, min(1.0 - page, event.y / height - page / 2))
+            self.canvas.yview_moveto(target)
+        self._draw_scrollbar(*self._last_scroll, active=True)
+
+    def _on_scrollbar_drag(self, event):
+        if not self._scrollbar_dragging:
+            return
+        height = max(self.scrollbar_canvas.winfo_height(), 1)
+        first, last = self._last_scroll
+        page = max(last - first, 0.01)
+        thumb_height = max(getattr(self, "_thumb_bottom", 0) - getattr(self, "_thumb_top", 0), 34)
+        movable = max(height - thumb_height, 1)
+        new_top = max(0, min(movable, event.y - self._scrollbar_drag_offset))
+        target = max(0.0, min(1.0 - page, new_top / movable * (1.0 - page)))
+        self.canvas.yview_moveto(target)
+
+    def _on_scrollbar_release(self, event):
+        self._scrollbar_dragging = False
+        self._draw_scrollbar(*self._last_scroll)
+
+    def _on_scrollbar_enter(self, event=None):
+        self._draw_scrollbar(*self._last_scroll, active=True)
+
+    def _on_scrollbar_leave(self, event=None):
+        if not self._scrollbar_dragging:
+            self._draw_scrollbar(*self._last_scroll, active=False)
 
     def _on_mousewheel(self, event):
         bbox = self.canvas.bbox("all")
@@ -58,7 +179,7 @@ class ScrollableFrame(tk.Frame):
 
 
 # =============================================================================
-# TOOLTIP KLASSE
+# TOOLTIP
 # =============================================================================
 class Tooltip:
     def __init__(self, widget, text, bg="#1A1A1A", fg="#FFFFFF"):
@@ -78,17 +199,7 @@ class Tooltip:
         self.tip = tk.Toplevel(self.widget)
         self.tip.wm_overrideredirect(True)
         self.tip.wm_geometry(f"+{x}+{y}")
-        tk.Label(
-            self.tip,
-            text=self.text,
-            bg=self.bg,
-            fg=self.fg,
-            font=("Segoe UI", 9),
-            padx=10,
-            pady=5,
-            relief="flat",
-            bd=0,
-        ).pack()
+        tk.Label(self.tip, text=self.text, bg=self.bg, fg=self.fg, font=("Segoe UI", 9), padx=10, pady=5, relief="flat", bd=0).pack()
 
     def hide(self, event=None):
         if self.tip:
@@ -115,63 +226,29 @@ class DevPulsePlanner(tk.Tk):
 
         self.controller = PlannerController(view=self)
 
-        # ===== THEMES: altes Design beibehalten =====
         self.themes = {
             "light": {
-                "bg": "#F0F2F5",
-                "sidebar": "#FFFFFF",
-                "sidebar_top": "#0A1628",
-                "text_main": "#0D1117",
-                "text_sub": "#7D8590",
-                "text_inv": "#FFFFFF",
-                "accent": "#1A73E8",
-                "accent2": "#00C896",
-                "card": "#FFFFFF",
-                "card_hover": "#F6F8FF",
-                "border": "#E2E8F0",
-                "border_focus": "#1A73E8",
-                "topbar": "#0A1628",
-                "col_open": "#EEF2FF",
-                "col_wip": "#FFF7ED",
-                "col_done": "#F0FDF4",
-                "tag_high": "#FF4D6D",
-                "tag_med": "#FF9A3C",
-                "tag_low": "#1A73E8",
-                "shadow": "#00000018",
-                "btn_add": "#1A73E8",
-                "btn_demo": "#6366F1",
-                "btn_theme": "#374151",
-                "badge_open": "#3B82F6",
-                "badge_wip": "#F59E0B",
-                "badge_done": "#10B981",
+                "bg": "#F0F2F5", "sidebar": "#FFFFFF", "sidebar_top": "#0A1628",
+                "text_main": "#0D1117", "text_sub": "#7D8590", "text_inv": "#FFFFFF",
+                "accent": "#1A73E8", "accent2": "#00C896", "card": "#FFFFFF",
+                "card_hover": "#F6F8FF", "border": "#E2E8F0", "border_focus": "#1A73E8",
+                "topbar": "#0A1628", "col_open": "#EEF2FF", "col_wip": "#FFF7ED", "col_done": "#F0FDF4",
+                "tag_high": "#FF4D6D", "tag_med": "#FF9A3C", "tag_low": "#1A73E8",
+                "shadow": "#00000018", "btn_add": "#1A73E8", "btn_demo": "#6366F1", "btn_theme": "#374151",
+                "badge_open": "#3B82F6", "badge_wip": "#F59E0B", "badge_done": "#10B981",
+                "scrollbar_thumb": "#C8CDD3", "scrollbar_trough": "#EDF0F3", "scrollbar_active": "#AEB4BD",
             },
             "dark": {
-                "bg": "#0D1117",
-                "sidebar": "#161B22",
-                "sidebar_top": "#0D1117",
-                "text_main": "#E6EDF3",
-                "text_sub": "#7D8590",
-                "text_inv": "#E6EDF3",
-                "accent": "#58A6FF",
-                "accent2": "#3FB950",
-                "card": "#161B22",
-                "card_hover": "#1C2128",
-                "border": "#30363D",
-                "border_focus": "#58A6FF",
-                "topbar": "#010409",
-                "col_open": "#161B22",
-                "col_wip": "#1C1811",
-                "col_done": "#0F1A12",
-                "tag_high": "#FF4D6D",
-                "tag_med": "#FF9A3C",
-                "tag_low": "#58A6FF",
-                "shadow": "#00000040",
-                "btn_add": "#238636",
-                "btn_demo": "#6E40C9",
-                "btn_theme": "#30363D",
-                "badge_open": "#1D4ED8",
-                "badge_wip": "#D97706",
-                "badge_done": "#059669",
+                "bg": "#0D1117", "sidebar": "#161B22", "sidebar_top": "#0D1117",
+                "text_main": "#E6EDF3", "text_sub": "#8B949E", "text_inv": "#E6EDF3",
+                "accent": "#58A6FF", "accent2": "#3FB950", "card": "#161B22",
+                "card_hover": "#1C2128", "border": "#30363D", "border_focus": "#58A6FF",
+                "topbar": "#010409", "col_open": "#161B22", "col_wip": "#1C1811", "col_done": "#0F1A12",
+                "tag_high": "#FF4D6D", "tag_med": "#FF9A3C", "tag_low": "#58A6FF",
+                "shadow": "#00000040", "btn_add": "#238636", "btn_demo": "#6E40C9", "btn_theme": "#30363D",
+                "badge_open": "#1D4ED8", "badge_wip": "#D97706", "badge_done": "#059669",
+                # Screenshot-Fix: Scrollbar-Spur passt jetzt zur dunklen Spalte, Thumb ist nur leicht heller.
+                "scrollbar_thumb": "#47515C", "scrollbar_trough": "#161B22", "scrollbar_active": "#6B7785",
             },
         }
         self.current_theme = "light"
@@ -179,20 +256,27 @@ class DevPulsePlanner(tk.Tk):
         self.card_images = []
         self._task_count = {"offen": 0, "in_bearbeitung": 0, "erledigt": 0}
 
-        # ===== NUR NEU: Drag-&-Drop-Zustand =====
+        # Performance-Caches
         self._drop_zones = {}
+        self._columns = {}
+        self._column_scrolls = {}
+        self._column_count_labels = {}
+        self._card_widgets = {}
+        self._visible_task_ids = set()
+        self._search_after_id = None
+
+        # Drag-&-Drop Zustand
         self._drag_data = None
         self._last_drop_status = None
         self._drag_preview = None
+        self._drag_preview_after_id = None
+        self._drag_preview_pending_xy = None
 
         self._setup_styles()
         self._build_layout()
         self._populate_layout()
         self.load_initial_data()
 
-    # =========================================================================
-    # SETUP & LAYOUT
-    # =========================================================================
     def _setup_styles(self):
         self.FONT_DISPLAY = ("Segoe UI Black", 22, "bold")
         self.FONT_TITLE = ("Segoe UI Semibold", 14)
@@ -207,14 +291,11 @@ class DevPulsePlanner(tk.Tk):
     def _build_layout(self):
         colors = self.themes[self.current_theme]
         self.config(bg=colors["bg"])
-
         self.sidebar = tk.Frame(self, width=240, bg=colors["sidebar"])
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
-
         self.main_area = tk.Frame(self, bg=colors["bg"])
         self.main_area.pack(side="left", fill="both", expand=True)
-
         self.ui_elements["sidebar"] = self.sidebar
         self.ui_elements["main_area"] = self.main_area
 
@@ -233,22 +314,10 @@ class DevPulsePlanner(tk.Tk):
         search_frame.pack(fill="x")
         search_inner = tk.Frame(search_frame, bg=colors["card"])
         search_inner.pack(fill="x")
-
-        tk.Label(search_inner, text="🔍", font=self.FONT_BODY, bg=colors["card"], fg=colors["text_sub"]).pack(
-            side="left", padx=(8, 4), pady=6
-        )
+        tk.Label(search_inner, text="🔍", font=self.FONT_BODY, bg=colors["card"], fg=colors["text_sub"]).pack(side="left", padx=(8, 4), pady=6)
 
         self.search_var = tk.StringVar(value="Suchen…")
-        search_entry = tk.Entry(
-            search_inner,
-            textvariable=self.search_var,
-            font=self.FONT_SMALL,
-            bg=colors["card"],
-            fg=colors["text_main"],
-            relief="flat",
-            bd=0,
-            insertbackground=colors["accent"],
-        )
+        search_entry = tk.Entry(search_inner, textvariable=self.search_var, font=self.FONT_SMALL, bg=colors["card"], fg=colors["text_main"], relief="flat", bd=0, insertbackground=colors["accent"])
         search_entry.pack(side="left", fill="x", expand=True, pady=6, padx=(0, 8))
         search_entry.bind("<FocusIn>", self._clear_search_placeholder)
         search_entry.bind("<FocusOut>", self._restore_search_placeholder)
@@ -265,7 +334,7 @@ class DevPulsePlanner(tk.Tk):
         stats_frame = tk.Frame(self.sidebar, bg=colors["sidebar"], padx=12, pady=10)
         stats_frame.pack(fill="x")
         self.ui_elements["stats_frame"] = stats_frame
-        self._build_stats(stats_frame)
+        self._build_stats_once(stats_frame)
 
         tk.Frame(self.sidebar, bg=colors["border"], height=1).pack(fill="x", padx=12)
         btn_frame = tk.Frame(self.sidebar, bg=colors["sidebar"], padx=12, pady=12)
@@ -292,7 +361,6 @@ class DevPulsePlanner(tk.Tk):
         date_lbl = tk.Label(board_header, text=datetime.now().strftime("KW %W  ·  %d.%m.%Y"), font=self.FONT_SMALL, bg=colors["bg"], fg=colors["text_sub"])
         date_lbl.pack(side="right", pady=6)
         self.ui_elements["date_lbl"] = date_lbl
-
         tk.Frame(board_outer, bg=colors["border"], height=1).pack(fill="x", padx=board_padding, pady=(8, 10))
 
         cols_frame = tk.Frame(board_outer, bg=colors["bg"])
@@ -300,10 +368,8 @@ class DevPulsePlanner(tk.Tk):
         cols_frame.columnconfigure((0, 1, 2), weight=1, uniform="col")
         cols_frame.rowconfigure(0, weight=1)
         self.ui_elements["cols_frame"] = cols_frame
+        self._build_board_columns_once(cols_frame)
 
-    # =========================================================================
-    # UI BAUSTEINE
-    # =========================================================================
     def _draw_logo(self, parent):
         colors = self.themes[self.current_theme]
         try:
@@ -315,20 +381,13 @@ class DevPulsePlanner(tk.Tk):
             cv.pack(side="left", padx=(16, 8), pady=20)
             cv.create_oval(2, 2, 30, 30, fill=colors["accent"], outline="")
             cv.create_text(16, 16, text="D", fill="white", font=("Segoe UI Black", 14))
-
         name = tk.Frame(parent, bg=colors["sidebar_top"])
         name.pack(side="left")
         tk.Label(name, text="Dev", font=("Segoe UI Black", 15), bg=colors["sidebar_top"], fg=colors["accent"]).pack(side="left")
         tk.Label(name, text="Pulse", font=("Segoe UI Semibold", 15), bg=colors["sidebar_top"], fg="#FFFFFF").pack(side="left")
 
     def _build_nav(self, parent):
-        self.nav_items = [
-            ("📋", "Board", True),
-            ("📈", "Analysen", False),
-            ("🗓️", "Kalender", False),
-            ("⚙️", "Einstellungen", False),
-        ]
-        for icon, label, active in self.nav_items:
+        for icon, label, active in [("📋", "Board", True), ("📈", "Analysen", False), ("🗓️", "Kalender", False), ("⚙️", "Einstellungen", False)]:
             self._make_nav_item(parent, icon, label, active)
 
     def _make_nav_item(self, parent, icon, label, active):
@@ -341,24 +400,32 @@ class DevPulsePlanner(tk.Tk):
         tk.Frame(row, bg=bar_color, width=3).pack(side="left", fill="y")
         tk.Label(row, text=f"  {icon}  {label}", font=self.FONT_NAV, bg=bg, fg=fg, anchor="w").pack(side="left", fill="x", expand=True, ipady=11, padx=4)
 
-    def _build_stats(self, parent):
+    def _build_stats_once(self, parent):
         colors = self.themes[self.current_theme]
+        self._stat_value_labels = {}
         for child in parent.winfo_children():
             child.destroy()
         tk.Label(parent, text="ÜBERSICHT", font=self.FONT_BADGE, bg=colors["sidebar"], fg=colors["text_sub"]).pack(anchor="w", pady=(0, 8))
         stat_row = tk.Frame(parent, bg=colors["sidebar"])
         stat_row.pack(fill="x")
-        stats = [
-            ("Offen", str(self._task_count["offen"]), colors["badge_open"]),
-            ("Aktiv", str(self._task_count["in_bearbeitung"]), colors["badge_wip"]),
-            ("Fertig", str(self._task_count["erledigt"]), colors["badge_done"]),
-        ]
-        for index, (label, value, color) in enumerate(stats):
+        for index, (status_key, label, color) in enumerate([
+            ("offen", "Offen", colors["badge_open"]),
+            ("in_bearbeitung", "Aktiv", colors["badge_wip"]),
+            ("erledigt", "Fertig", colors["badge_done"]),
+        ]):
             cell = tk.Frame(stat_row, bg=colors["card"], highlightbackground=colors["border"], highlightthickness=1)
             cell.pack(side="left", expand=True, fill="x", padx=(0, 0 if index == 2 else 4))
-            tk.Label(cell, text=value, font=("Segoe UI Black", 18), bg=colors["card"], fg=color).pack(pady=(8, 0))
+            value_lbl = tk.Label(cell, text="0", font=("Segoe UI Black", 18), bg=colors["card"], fg=color)
+            value_lbl.pack(pady=(8, 0))
             tk.Label(cell, text=label, font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"]).pack(pady=(0, 6))
+            self._stat_value_labels[status_key] = value_lbl
         self.ui_elements["stat_row"] = stat_row
+
+    def _update_stats_only(self):
+        for status, value in self._task_count.items():
+            label = getattr(self, "_stat_value_labels", {}).get(status)
+            if label and label.winfo_exists():
+                label.config(text=str(value))
 
     def _build_sidebar_buttons(self, parent):
         colors = self.themes[self.current_theme]
@@ -383,11 +450,39 @@ class DevPulsePlanner(tk.Tk):
         tk.Button(right, text="➕ Task", command=self._add_task_dialog, font=self.FONT_BADGE, bg=colors["btn_add"], fg="#FFFFFF", relief="flat", padx=10, pady=6, cursor="hand2").pack(side="left", padx=4)
         tk.Button(right, text="🔄 Refresh", command=self.refresh_board, font=self.FONT_BADGE, bg=colors["btn_theme"], fg="#FFFFFF", relief="flat", padx=10, pady=6, cursor="hand2").pack(side="left", padx=4)
 
+    def _build_board_columns_once(self, cols_frame):
+        colors = self.themes[self.current_theme]
+        self._drop_zones = {}
+        self._columns = {}
+        self._column_scrolls = {}
+        self._column_count_labels = {}
+        for col_idx, (status_key, title, col_bg, badge_color) in enumerate([
+            ("offen", "📥  Offen", colors["col_open"], colors["badge_open"]),
+            ("in_bearbeitung", "⚡  In Bearbeitung", colors["col_wip"], colors["badge_wip"]),
+            ("erledigt", "✅  Erledigt", colors["col_done"], colors["badge_done"]),
+        ]):
+            grid_padx = (0, 8) if col_idx < 2 else (0, 0)
+            wrapper = tk.Frame(cols_frame, bg=col_bg, highlightbackground=colors["border"], highlightthickness=1)
+            wrapper.grid(row=0, column=col_idx, sticky="nsew", padx=grid_padx, pady=4)
+            self._drop_zones[status_key] = wrapper
+            self._columns[status_key] = wrapper
+            header = tk.Frame(wrapper, bg=col_bg, padx=14, pady=12)
+            header.pack(fill="x")
+            tk.Label(header, text=title, font=self.FONT_HEAD, bg=col_bg, fg=colors["text_main"]).pack(side="left")
+            badge = tk.Label(header, text="0", font=self.FONT_BADGE, bg=badge_color, fg="#FFFFFF", padx=7, pady=2)
+            badge.pack(side="right")
+            self._column_count_labels[status_key] = badge
+            tk.Frame(wrapper, bg=colors["border"], height=1).pack(fill="x", padx=10)
+            scroll = ScrollableFrame(wrapper, bg=col_bg, scrollbar_bg=colors["scrollbar_thumb"], scrollbar_trough=colors["scrollbar_trough"], scrollbar_active=colors["scrollbar_active"])
+            scroll.pack(fill="both", expand=True)
+            self._column_scrolls[status_key] = scroll
+
     # =========================================================================
-    # DATEN & BOARD
+    # DATEN & BOARD - PERFORMANCEOPTIMIERT
     # =========================================================================
     def load_initial_data(self):
         self.controller.load_demo_data()
+        self.refresh_board()
 
     def _clear_search_placeholder(self, event=None):
         if self.search_var.get() == "Suchen…":
@@ -400,74 +495,90 @@ class DevPulsePlanner(tk.Tk):
     def _on_search(self, *args):
         if "cols_frame" not in self.ui_elements:
             return
-        self.refresh_board()
+        if self._search_after_id:
+            self.after_cancel(self._search_after_id)
+        self._search_after_id = self.after(180, self.refresh_board)
 
     def refresh_board(self):
-        if "cols_frame" not in self.ui_elements:
+        if not self._column_scrolls:
             return
-        colors = self.themes[self.current_theme]
-        cols_frame = self.ui_elements["cols_frame"]
-        for widget in cols_frame.winfo_children():
-            widget.destroy()
-
         query = self.search_var.get().strip().lower() if hasattr(self, "search_var") else ""
         if query == "suchen…":
             query = ""
 
-        def filtered(tasks):
+        def task_matches(task):
             if not query:
-                return tasks
-            return [task for task in tasks if query in task.get_titel().lower() or query in (task.get_beschreibung() or "").lower()]
+                return True
+            return query in task.get_titel().lower() or query in (task.get_beschreibung() or "").lower()
 
-        offen = filtered(self.controller.get_tasks_by_status("offen"))
-        in_bearbeitung = filtered(self.controller.get_tasks_by_status("in_bearbeitung"))
-        erledigt = filtered(self.controller.get_tasks_by_status("erledigt"))
+        all_existing_ids = set()
+        visible_ids = set()
+        tasks_by_status = {}
+        for status in self.STATUSES:
+            tasks = list(self.controller.get_tasks_by_status(status))
+            tasks_by_status[status] = tasks
+            self._task_count[status] = len([task for task in tasks if task_matches(task)]) if query else len(tasks)
+            for task in tasks:
+                all_existing_ids.add(task.get_id())
 
-        self._task_count = {"offen": len(offen), "in_bearbeitung": len(in_bearbeitung), "erledigt": len(erledigt)}
-        if "stats_frame" in self.ui_elements:
-            self._build_stats(self.ui_elements["stats_frame"])
+        for task_id in list(self._card_widgets.keys()):
+            if task_id not in all_existing_ids:
+                self._destroy_card_widget(task_id)
 
-        columns = [
-            ("offen", "📥  Offen", offen, colors["col_open"], colors["badge_open"]),
-            ("in_bearbeitung", "⚡  In Bearbeitung", in_bearbeitung, colors["col_wip"], colors["badge_wip"]),
-            ("erledigt", "✅  Erledigt", erledigt, colors["col_done"], colors["badge_done"]),
-        ]
-        self._drop_zones = {}
+        for status in self.STATUSES:
+            col_bg = self._get_column_bg(status)
+            for task in tasks_by_status[status]:
+                task_id = task.get_id()
+                if not task_matches(task):
+                    self._hide_card(task_id)
+                    continue
+                visible_ids.add(task_id)
+                card_state = self._card_widgets.get(task_id)
+                if card_state is None:
+                    self._create_card_from_task(task, status, col_bg)
+                elif card_state.get("status") != status:
+                    self._destroy_card_widget(task_id)
+                    self._create_card_from_task(task, status, col_bg)
+                else:
+                    self._update_card_content(task_id, task)
+                self._show_card_in_order(task_id)
 
-        for col_idx, (status_key, title, tasks, col_bg, badge_color) in enumerate(columns):
-            grid_padx = (0, 8) if col_idx < 2 else (0, 0)
-            wrapper = tk.Frame(cols_frame, bg=col_bg, highlightbackground=colors["border"], highlightthickness=1)
-            wrapper.grid(row=0, column=col_idx, sticky="nsew", padx=grid_padx, pady=4)
-            self._drop_zones[status_key] = wrapper
+        for task_id in list(self._card_widgets.keys()):
+            if task_id not in visible_ids:
+                self._hide_card(task_id)
 
-            header = tk.Frame(wrapper, bg=col_bg, padx=14, pady=12)
-            header.pack(fill="x")
-            tk.Label(header, text=title, font=self.FONT_HEAD, bg=col_bg, fg=colors["text_main"]).pack(side="left")
-            tk.Label(header, text=str(len(tasks)), font=self.FONT_BADGE, bg=badge_color, fg="#FFFFFF", padx=7, pady=2).pack(side="right")
-            tk.Frame(wrapper, bg=colors["border"], height=1).pack(fill="x", padx=10)
+        self._visible_task_ids = visible_ids
+        self._update_counts_only()
 
-            scroll = ScrollableFrame(wrapper, bg=col_bg)
-            scroll.pack(fill="both", expand=True)
-
-            if tasks:
-                for task in tasks:
-                    prio_map = {1: "Low", 3: "Medium", 5: "High"}
-                    task_prio = task.get_prio() if hasattr(task, "get_prio") else 3
-                    prio = prio_map.get(task_prio, "Medium")
-                    datum = "–"
-                    if hasattr(task, "get_faelligkeitsdatum") and task.get_faelligkeitsdatum():
-                        datum = task.get_faelligkeitsdatum().strftime("%d.%m.%Y")
-                    self._create_card(scroll.inner, task.get_titel(), task.get_beschreibung(), prio, datum, task.get_id(), col_bg, status_key)
-            else:
-                empty = tk.Frame(scroll.inner, bg=col_bg)
-                empty.pack(fill="x", padx=14, pady=30)
-                tk.Label(empty, text="🗒", font=("Segoe UI", 28), bg=col_bg, fg=colors["text_sub"]).pack()
-                tk.Label(empty, text="Keine Aufgaben", font=self.FONT_SMALL, bg=col_bg, fg=colors["text_sub"]).pack(pady=(4, 0))
-
-    def _create_card(self, parent, title, desc, prio, date, task_id, col_bg, current_status):
+    def _get_column_bg(self, status):
         colors = self.themes[self.current_theme]
+        return {"offen": colors["col_open"], "in_bearbeitung": colors["col_wip"], "erledigt": colors["col_done"]}[status]
+
+    def _update_counts_only(self):
+        for status, count in self._task_count.items():
+            badge = self._column_count_labels.get(status)
+            if badge and badge.winfo_exists():
+                badge.config(text=str(count))
+        self._update_stats_only()
+
+    def _task_view_data(self, task):
+        prio_map = {1: "Low", 3: "Medium", 5: "High"}
+        task_prio = task.get_prio() if hasattr(task, "get_prio") else 3
+        prio = prio_map.get(task_prio, "Medium")
+        date = "–"
+        if hasattr(task, "get_faelligkeitsdatum") and task.get_faelligkeitsdatum():
+            date = task.get_faelligkeitsdatum().strftime("%d.%m.%Y")
+        return {"title": task.get_titel(), "desc": task.get_beschreibung() or "", "prio": prio, "date": date, "task_id": task.get_id()}
+
+    def _create_card_from_task(self, task, status, col_bg):
+        data = self._task_view_data(task)
+        parent = self._column_scrolls[status].inner
+        self._create_card(parent, data, status, col_bg)
+
+    def _create_card(self, parent, data, current_status, col_bg):
+        colors = self.themes[self.current_theme]
+        task_id = data["task_id"]
         outer = tk.Frame(parent, bg=col_bg, padx=10, pady=4)
-        outer.pack(fill="x")
         card = tk.Frame(outer, bg=colors["card"], highlightbackground=colors["border"], highlightthickness=1, padx=14, pady=12, cursor="hand2")
         card.pack(fill="x")
 
@@ -483,100 +594,116 @@ class DevPulsePlanner(tk.Tk):
 
         card.bind("<Enter>", on_enter)
         card.bind("<Leave>", on_leave)
-
         header = tk.Frame(card, bg=colors["card"])
         header.pack(fill="x")
         prio_colors = {"High": colors["tag_high"], "Medium": colors["tag_med"], "Low": colors["tag_low"]}
-        tk.Label(header, text=f"● {prio}", font=("Segoe UI Bold", 7), bg=colors["card"], fg=prio_colors.get(prio, colors["tag_low"])).pack(side="left")
-
-        if task_id:
-            tk.Button(header, text="✕", font=("Segoe UI Bold", 8), bg=colors["card"], fg=colors["text_sub"], relief="flat", bd=0, cursor="hand2", activeforeground="#FF4D6D", activebackground=colors["card"], command=lambda: self.controller.delete_task(task_id)).pack(side="right")
-
-        tk.Label(card, text=title, font=("Segoe UI Semibold", 10), bg=colors["card"], fg=colors["text_main"], anchor="w", wraplength=240, justify="left").pack(fill="x", pady=(6, 2))
-        if desc:
-            tk.Label(card, text=desc, font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"], anchor="w", wraplength=240, justify="left").pack(fill="x", pady=(0, 8))
+        prio_label = tk.Label(header, text=f"● {data['prio']}", font=("Segoe UI Bold", 7), bg=colors["card"], fg=prio_colors.get(data["prio"], colors["tag_low"]))
+        prio_label.pack(side="left")
+        tk.Button(header, text="✕", font=("Segoe UI Bold", 8), bg=colors["card"], fg=colors["text_sub"], relief="flat", bd=0, cursor="hand2", activeforeground="#FF4D6D", activebackground=colors["card"], command=lambda tid=task_id: self._delete_task(tid)).pack(side="right")
+        title_label = tk.Label(card, text=data["title"], font=("Segoe UI Semibold", 10), bg=colors["card"], fg=colors["text_main"], anchor="w", wraplength=240, justify="left")
+        title_label.pack(fill="x", pady=(6, 2))
+        desc_label = None
+        if data["desc"]:
+            desc_label = tk.Label(card, text=data["desc"], font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"], anchor="w", wraplength=240, justify="left")
+            desc_label.pack(fill="x", pady=(0, 8))
         tk.Frame(card, bg=colors["border"], height=1).pack(fill="x", pady=(4, 6))
         footer = tk.Frame(card, bg=colors["card"])
         footer.pack(fill="x")
-        tk.Label(footer, text=f"📅 {date}", font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"]).pack(side="left")
-        if task_id:
-            tk.Button(footer, text="✓ Erledigt", font=("Segoe UI Bold", 7), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", bd=0, padx=7, pady=2, cursor="hand2", command=lambda: self.controller.complete_task(task_id)).pack(side="right")
+        date_label = tk.Label(footer, text=f"📅 {data['date']}", font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"])
+        date_label.pack(side="left")
+        tk.Button(footer, text="✓ Erledigt", font=("Segoe UI Bold", 7), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", bd=0, padx=7, pady=2, cursor="hand2", command=lambda tid=task_id: self._complete_task(tid)).pack(side="right")
+        self._card_widgets[task_id] = {"outer": outer, "card": card, "status": current_status, "data": data.copy(), "labels": {"prio": prio_label, "title": title_label, "desc": desc_label, "date": date_label}}
+        self._bind_card_drag(card, task_id, data["title"], current_status, root_card=card, card_info=data.copy())
 
-        # Wichtig: Erst NACH dem Erstellen aller Labels/Frames binden.
-        # Dadurch gilt wirklich die gesamte Karte als Drag-/Auswahlfläche.
-        self._bind_card_drag(
-            card,
-            task_id,
-            title,
-            current_status,
-            root_card=card,
-            card_info={"title": title, "desc": desc, "prio": prio, "date": date},
-        )
+    def _update_card_content(self, task_id, task):
+        state = self._card_widgets.get(task_id)
+        if not state:
+            return
+        new_data = self._task_view_data(task)
+        old_data = state.get("data", {})
+        if new_data == old_data:
+            return
+        colors = self.themes[self.current_theme]
+        labels = state["labels"]
+        prio_colors = {"High": colors["tag_high"], "Medium": colors["tag_med"], "Low": colors["tag_low"]}
+        labels["prio"].config(text=f"● {new_data['prio']}", fg=prio_colors.get(new_data["prio"], colors["tag_low"]))
+        labels["title"].config(text=new_data["title"])
+        labels["date"].config(text=f"📅 {new_data['date']}")
+        desc_label = labels.get("desc")
+        if new_data["desc"]:
+            if desc_label and desc_label.winfo_exists():
+                desc_label.config(text=new_data["desc"])
+            else:
+                status = state["status"]
+                self._destroy_card_widget(task_id)
+                self._create_card_from_task(task, status, self._get_column_bg(status))
+                return
+        elif desc_label and desc_label.winfo_exists():
+            status = state["status"]
+            self._destroy_card_widget(task_id)
+            self._create_card_from_task(task, status, self._get_column_bg(status))
+            return
+        state["data"] = new_data.copy()
 
-    # =========================================================================
-    # DRAG & DROP - NUR ERGÄNZT, ALTES DESIGN BLEIBT
-    # =========================================================================
+    def _show_card_in_order(self, task_id):
+        state = self._card_widgets.get(task_id)
+        if state and state["outer"].winfo_exists():
+            state["outer"].pack_forget()
+            state["outer"].pack(fill="x")
+
+    def _hide_card(self, task_id):
+        state = self._card_widgets.get(task_id)
+        if state and state["outer"].winfo_exists():
+            state["outer"].pack_forget()
+
+    def _destroy_card_widget(self, task_id):
+        state = self._card_widgets.pop(task_id, None)
+        if state and state["outer"].winfo_exists():
+            state["outer"].destroy()
+
+    def _delete_task(self, task_id):
+        self.controller.delete_task(task_id)
+        self.refresh_board()
+
+    def _complete_task(self, task_id):
+        self.controller.complete_task(task_id)
+        self.refresh_board()
+
     def _bind_card_drag(self, widget, task_id, title, current_status, root_card=None, card_info=None):
-        """Bindet Drag-&-Drop an die gesamte Karte.
-
-        Die Bindings werden rekursiv auf alle Labels/Frames der Karte gesetzt.
-        Buttons bleiben absichtlich klickbar und starten keinen Drag-Vorgang.
-        """
         if not task_id or isinstance(widget, tk.Button):
             return
-
         if root_card is None:
             root_card = widget
         if card_info is None:
-            card_info = {"title": title, "desc": "", "prio": "Medium", "date": "–"}
-
+            card_info = {"title": title, "desc": "", "prio": "Medium", "date": "–", "task_id": task_id}
         try:
             widget.config(cursor="hand2")
         except tk.TclError:
             pass
-
-        widget.bind(
-            "<ButtonPress-1>",
-            lambda event: self._start_drag(event, task_id, title, current_status, root_card, card_info),
-            add="+",
-        )
+        widget.bind("<ButtonPress-1>", lambda event: self._start_drag(event, task_id, title, current_status, root_card, card_info), add="+")
         widget.bind("<B1-Motion>", self._drag_motion, add="+")
         widget.bind("<ButtonRelease-1>", self._drop_task, add="+")
-
         for child in widget.winfo_children():
             self._bind_card_drag(child, task_id, title, current_status, root_card, card_info)
 
     def _start_drag(self, event, task_id, title, current_status, root_card, card_info):
-        self._drag_data = {
-            "task_id": task_id,
-            "title": title,
-            "source_status": current_status,
-            "start_x": event.x_root,
-            "start_y": event.y_root,
-            "offset_x": event.x_root - root_card.winfo_rootx(),
-            "offset_y": event.y_root - root_card.winfo_rooty(),
-            "dragging": False,
-            "root_card": root_card,
-            "card_info": card_info,
-        }
+        cached = self._card_widgets.get(task_id, {})
+        current_status = cached.get("status", current_status)
+        self._drag_data = {"task_id": task_id, "title": title, "source_status": current_status, "start_x": event.x_root, "start_y": event.y_root, "offset_x": event.x_root - root_card.winfo_rootx(), "offset_y": event.y_root - root_card.winfo_rooty(), "dragging": False, "root_card": root_card, "card_info": card_info}
         self._last_drop_status = None
 
     def _drag_motion(self, event):
         if not self._drag_data:
             return
-
         dx = abs(event.x_root - self._drag_data["start_x"])
         dy = abs(event.y_root - self._drag_data["start_y"])
-
         if not self._drag_data["dragging"]:
             if dx < 5 and dy < 5:
                 return
             self._drag_data["dragging"] = True
             self._set_original_card_drag_state(True)
             self._create_drag_preview(event)
-
-        self._move_drag_preview(event)
-
+        self._schedule_drag_preview_move(event)
         target_status = self._get_drop_status_at(event.x_root, event.y_root)
         if target_status != self._last_drop_status:
             self._last_drop_status = target_status
@@ -585,35 +712,25 @@ class DevPulsePlanner(tk.Tk):
     def _drop_task(self, event):
         if not self._drag_data:
             return
-
         target_status = self._get_drop_status_at(event.x_root, event.y_root)
         source_status = self._drag_data["source_status"]
         task_id = self._drag_data["task_id"]
         was_dragging = self._drag_data["dragging"]
-
         self._destroy_drag_preview()
         self._set_original_card_drag_state(False)
         self._reset_drop_zone_highlights()
         self._drag_data = None
         self._last_drop_status = None
-
         if was_dragging and target_status and target_status != source_status:
             self._move_task_to_status(task_id, target_status)
 
     def _create_drag_preview(self, event):
-        """Erstellt eine bewegliche Kopie der gesamten Karte.
-
-        Das ist bewusst kein kleines Text-Label: Die Vorschau sieht wie die Karte aus
-        und bewegt sich als zusammenhängende Fläche mit der Maus.
-        """
         if not self._drag_data or self._drag_preview:
             return
-
         colors = self.themes[self.current_theme]
         info = self._drag_data.get("card_info", {})
         root_card = self._drag_data.get("root_card")
         width = max(root_card.winfo_width() if root_card and root_card.winfo_exists() else 260, 240)
-
         preview = tk.Toplevel(self)
         preview.overrideredirect(True)
         preview.attributes("-topmost", True)
@@ -621,82 +738,55 @@ class DevPulsePlanner(tk.Tk):
             preview.attributes("-alpha", 0.94)
         except tk.TclError:
             pass
-
         outer = tk.Frame(preview, bg=colors["border"], padx=1, pady=1)
         outer.pack(fill="both", expand=True)
         card = tk.Frame(outer, bg=colors["card"], padx=14, pady=12)
         card.pack(fill="both", expand=True)
-
         prio = info.get("prio", "Medium")
-        prio_colors = {
-            "High": colors["tag_high"],
-            "Medium": colors["tag_med"],
-            "Low": colors["tag_low"],
-        }
-        tk.Label(
-            card,
-            text=f"● {prio}",
-            font=("Segoe UI Bold", 7),
-            bg=colors["card"],
-            fg=prio_colors.get(prio, colors["tag_low"]),
-            anchor="w",
-        ).pack(fill="x")
-        tk.Label(
-            card,
-            text=info.get("title", self._drag_data.get("title", "")),
-            font=("Segoe UI Semibold", 10),
-            bg=colors["card"],
-            fg=colors["text_main"],
-            anchor="w",
-            justify="left",
-            wraplength=max(width - 35, 200),
-        ).pack(fill="x", pady=(6, 2))
-
+        prio_colors = {"High": colors["tag_high"], "Medium": colors["tag_med"], "Low": colors["tag_low"]}
+        tk.Label(card, text=f"● {prio}", font=("Segoe UI Bold", 7), bg=colors["card"], fg=prio_colors.get(prio, colors["tag_low"]), anchor="w").pack(fill="x")
+        tk.Label(card, text=info.get("title", self._drag_data.get("title", "")), font=("Segoe UI Semibold", 10), bg=colors["card"], fg=colors["text_main"], anchor="w", justify="left", wraplength=max(width - 35, 200)).pack(fill="x", pady=(6, 2))
         desc = info.get("desc")
         if desc:
-            tk.Label(
-                card,
-                text=desc,
-                font=self.FONT_MICRO,
-                bg=colors["card"],
-                fg=colors["text_sub"],
-                anchor="w",
-                justify="left",
-                wraplength=max(width - 35, 200),
-            ).pack(fill="x", pady=(0, 8))
-
+            tk.Label(card, text=desc, font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"], anchor="w", justify="left", wraplength=max(width - 35, 200)).pack(fill="x", pady=(0, 8))
         tk.Frame(card, bg=colors["border"], height=1).pack(fill="x", pady=(4, 6))
-        tk.Label(
-            card,
-            text=f"📅 {info.get('date', '–')}",
-            font=self.FONT_MICRO,
-            bg=colors["card"],
-            fg=colors["text_sub"],
-            anchor="w",
-        ).pack(fill="x")
-
+        tk.Label(card, text=f"📅 {info.get('date', '–')}", font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"], anchor="w").pack(fill="x")
         preview.update_idletasks()
         self._drag_preview = preview
-        self._move_drag_preview(event)
+        self._schedule_drag_preview_move(event, immediate=True)
 
-    def _move_drag_preview(self, event):
+    def _schedule_drag_preview_move(self, event, immediate=False):
         if not self._drag_preview or not self._drag_data:
             return
         x = event.x_root - self._drag_data.get("offset_x", 20)
         y = event.y_root - self._drag_data.get("offset_y", 20)
-        self._drag_preview.geometry(f"+{x}+{y}")
+        self._drag_preview_pending_xy = (x, y)
+        if immediate:
+            self._apply_drag_preview_move()
+            return
+        if self._drag_preview_after_id is None:
+            self._drag_preview_after_id = self.after(16, self._apply_drag_preview_move)
+
+    def _apply_drag_preview_move(self):
+        self._drag_preview_after_id = None
+        if self._drag_preview and self._drag_preview_pending_xy:
+            x, y = self._drag_preview_pending_xy
+            self._drag_preview.geometry(f"+{x}+{y}")
 
     def _destroy_drag_preview(self):
+        if self._drag_preview_after_id:
+            self.after_cancel(self._drag_preview_after_id)
+            self._drag_preview_after_id = None
         if self._drag_preview:
             self._drag_preview.destroy()
             self._drag_preview = None
+        self._drag_preview_pending_xy = None
 
     def _set_original_card_drag_state(self, active):
         colors = self.themes[self.current_theme]
         card = self._drag_data.get("root_card") if self._drag_data else None
         if not card or not card.winfo_exists():
             return
-
         if active:
             card.config(highlightbackground=colors["accent"], highlightthickness=2, bg=colors["card_hover"])
             self._update_child_backgrounds(card, colors["card"], colors["card_hover"])
@@ -711,7 +801,6 @@ class DevPulsePlanner(tk.Tk):
             bottom = top + cols_frame.winfo_height()
             if not (top - 80 <= y_root <= bottom + 80):
                 return None
-
         for status, zone in self._drop_zones.items():
             if not zone.winfo_exists():
                 continue
@@ -748,7 +837,6 @@ class DevPulsePlanner(tk.Tk):
             elif target_status == "erledigt" and hasattr(self.controller, "complete_task"):
                 self.controller.complete_task(task_id)
                 moved = True
-
         if moved:
             self._notify_controller_after_status_change()
             self.refresh_board()
@@ -756,16 +844,7 @@ class DevPulsePlanner(tk.Tk):
             print("Drag & Drop: Status konnte nicht geändert werden. Bitte Controller/Task prüfen.")
 
     def _call_existing_controller_move_method(self, task_id, target_status):
-        for name in (
-            "move_task",
-            "move_task_to_status",
-            "update_task_status",
-            "set_task_status",
-            "change_task_status",
-            "change_status",
-            "update_status",
-            "set_status",
-        ):
+        for name in ("move_task", "move_task_to_status", "update_task_status", "set_task_status", "change_task_status", "change_status", "update_status", "set_status"):
             method = getattr(self.controller, name, None)
             if not callable(method):
                 continue
@@ -792,7 +871,6 @@ class DevPulsePlanner(tk.Tk):
                 for task in tasks:
                     if self._task_has_id(task, task_id):
                         return task
-
         for attr_name in ("tasks", "_tasks", "aufgaben", "_aufgaben", "task_list", "_task_list"):
             found = self._find_task_in_container(getattr(self.controller, attr_name, None), task_id)
             if found:
@@ -872,13 +950,10 @@ class DevPulsePlanner(tk.Tk):
                 pass
             self._update_child_backgrounds(child, old_bg, new_bg)
 
-    # =========================================================================
-    # DIALOGE
-    # =========================================================================
     def _add_task_dialog(self):
         win = tk.Toplevel(self)
         win.title("Neue Aufgabe")
-        win.geometry("420x360")
+        win.geometry("420x500")
         win.resizable(False, False)
         win.grab_set()
         win.transient(self)
@@ -910,6 +985,7 @@ class DevPulsePlanner(tk.Tk):
             desc = desc_text.get("1.0", "end").strip()
             self.controller.add_task(title, desc, prio=prio_var.get())
             win.destroy()
+            self.refresh_board()
 
         tk.Frame(win, bg=colors["border"], height=1).pack(fill="x", padx=24, pady=(10, 0))
         btn_row = tk.Frame(win, bg=colors["card"])
@@ -923,13 +999,15 @@ class DevPulsePlanner(tk.Tk):
 
     def _load_demo(self):
         self.controller.load_demo_data()
+        self.refresh_board()
 
-    # =========================================================================
-    # THEME TOGGLE
-    # =========================================================================
     def toggle_theme(self):
         self.current_theme = "dark" if self.current_theme == "light" else "light"
         self.card_images = []
+        self._card_widgets = {}
+        self._columns = {}
+        self._column_scrolls = {}
+        self._column_count_labels = {}
         for widget in self.winfo_children():
             widget.destroy()
         self.ui_elements = {}
@@ -937,9 +1015,6 @@ class DevPulsePlanner(tk.Tk):
         self._populate_layout()
         self.refresh_board()
 
-    # =========================================================================
-    # FULLSCREEN
-    # =========================================================================
     def _toggle_fullscreen(self, event=None):
         self.is_fullscreen = not self.is_fullscreen
         self.attributes("-fullscreen", self.is_fullscreen)
