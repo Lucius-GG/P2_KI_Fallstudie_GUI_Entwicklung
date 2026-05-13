@@ -25,28 +25,38 @@ class ScrollableFrame(tk.Frame):
     """Ein Frame mit vertikalem Scrollbalken"""
     def __init__(self, parent, bg, **kwargs):
         super().__init__(parent, bg=bg, **kwargs)
-        
+
         self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
         self.scrollbar = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.inner = tk.Frame(self.canvas, bg=bg)
-        
-        self.inner.bind("<Configure>", lambda e: self.canvas.configure(
-            scrollregion=self.canvas.bbox("all")))
-        
+
+        self.inner.bind("<Configure>", self._on_inner_configure)
+
         self.canvas_window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
-        
+
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
-        
+
         self.canvas.bind("<Configure>", self._on_canvas_resize)
-        self.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind("<Enter>", lambda e: self.canvas.bind_all("<MouseWheel>", self._on_mousewheel))
+        self.canvas.bind("<Leave>", lambda e: self.canvas.unbind_all("<MouseWheel>"))
 
     def _on_canvas_resize(self, event):
         self.canvas.itemconfig(self.canvas_window, width=event.width)
 
+    def _on_inner_configure(self, event):
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        bbox = self.canvas.bbox("all")
+        if bbox and bbox[3] > self.canvas.winfo_height():
+            self.scrollbar.pack(side="right", fill="y")
+        else:
+            self.scrollbar.pack_forget()
+
     def _on_mousewheel(self, event):
-        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        bbox = self.canvas.bbox("all")
+        if bbox and bbox[3] > self.canvas.winfo_height():
+            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
 
 # =============================================================================
@@ -400,7 +410,7 @@ class DevPulsePlanner(tk.Tk):
             return btn
 
         styled_btn("➕  Neue Aufgabe", colors["btn_add"],
-                   self._add_task_dialog, "Neue Task erstellen (Strg+N)")
+                   self._add_demo_task, "Demo-Aufgabe hinzufügen")
         styled_btn("🎲  Demo laden",   colors["btn_demo"],
                    self._load_demo,    "Beispieldaten laden")
         styled_btn("🌙  Theme wechseln", colors["btn_theme"],
@@ -704,6 +714,14 @@ class DevPulsePlanner(tk.Tk):
         tk.Button(btn_row, text="➕ Hinzufügen", command=_submit,
                   font=("Segoe UI Bold", 9), bg=colors["btn_add"], fg="#FFFFFF",
                   relief="flat", padx=12, pady=7, cursor="hand2").pack(side="right")
+
+    def _add_demo_task(self):
+        self.controller.add_task(
+            "Demo-Aufgabe",
+            "Diese Demo-Karte dient zum Testen der Scrollfunktion.",
+            prio=3
+        )
+        self.refresh_board()
 
     def _load_demo(self):
         self.controller.load_demo_data()
