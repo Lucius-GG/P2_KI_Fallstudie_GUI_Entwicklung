@@ -355,9 +355,13 @@ class DevPulsePlanner(tk.Tk):
 
     def _build_stats(self, parent):
         colors = self.themes[self.current_theme]
+
+        for child in parent.winfo_children():
+            child.destroy()
+
         tk.Label(parent, text="ÜBERSICHT",
-                 font=self.FONT_BADGE, bg=colors["sidebar"],
-                 fg=colors["text_sub"]).pack(anchor="w", pady=(0, 8))
+             font=self.FONT_BADGE, bg=colors["sidebar"],
+             fg=colors["text_sub"]).pack(anchor="w", pady=(0, 8))
 
         stat_row = tk.Frame(parent, bg=colors["sidebar"])
         stat_row.pack(fill="x")
