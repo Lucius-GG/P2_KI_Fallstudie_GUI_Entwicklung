@@ -68,7 +68,6 @@ def get_valid_date():
             print("Ungültige Eingabe. Bitte 1-4 wählen.")
 
 def lade_demo(manager: AufgabenManager):
-    # Demo-Aufgaben hinzufügen
     manager.aufgabe_hinzufuegen(TerminierteAufgabe(1, "Staubsaugen", "Wohnzimmer staubsaugen", "erledigt", 1, datetime.now()+timedelta(days=2), None, False))
     manager.aufgabe_hinzufuegen(TerminierteAufgabe(2, "Mathe lernen", "Aufgabenblatt 3", "offen", 3, datetime(2025,12,1), None, False))
     manager.aufgabe_hinzufuegen(TerminierteAufgabe(3, "Einkaufen", "Milch+Brot kaufen", "offen", 5, datetime.now()+timedelta(days=5), None, True))
@@ -142,7 +141,6 @@ def interface():
             if aid not in manager.aufgaben:
                 print(f"Aufgabe mit ID {aid} existiert nicht.")
             else:
-                # Prüfe, ob die Aufgabe einen Prioritäts-Slot hat
                 aufgabe = manager.aufgaben[aid]
                 if hasattr(aufgabe, "set_prio"):
                     prio = get_valid_priority()
@@ -162,7 +160,6 @@ def interface():
             prio_map = {1: "Niedrig", 3: "Mittel", 5: "Hoch"}
             data = []
 
-            
             for a in manager.aufgaben.values():
                 prio_val = a.get_prio() if hasattr(a, "get_prio") else None
                 prio_text = prio_map.get(prio_val, "-") if prio_val else "-"
@@ -173,13 +170,14 @@ def interface():
                     a.get_id(),
                     a.get_titel(),
                     a.get_beschreibung(),
-                    a.set_status(a.get_status()),
+                    a.get_status(),   # ✅ EINZIGER FIX
                     prio_text,
                     a.get_faelligkeitsdatum().strftime("%d.%m.%Y") if hasattr(a, "get_faelligkeitsdatum") and a.get_faelligkeitsdatum() else "-",
                     "Ja" if hasattr(a, "ist_wiederholend") and a.ist_wiederholend() else "Nein",
-                    intervall_text  # ← Hier verwenden
+                    intervall_text
                 ]
                 data.append(row)
+
             if data:
                 print(tabulate(data, headers=["ID", "Titel", "Beschreibung", "Status", "Priorität", "Fällig", "Wiederholend", "Wiederholung Intervall"], tablefmt="grid"))
             else:
@@ -202,6 +200,7 @@ def interface():
                         "Ja" if hasattr(a, "ist_wiederholend") and a.ist_wiederholend() else "Nein"
                     ]
                     data.append(row)
+
             if data:
                 print(tabulate(data, headers=["ID", "Titel", "Beschreibung", "Status", "Fällig", "Wiederholend"], tablefmt="grid"))
             else:
@@ -226,6 +225,7 @@ def interface():
                         "Ja" if hasattr(a, "ist_wiederholend") and a.ist_wiederholend() else "Nein"
                     ]
                     data.append(row)
+
             if data:
                 print(tabulate(data, headers=["ID", "Titel", "Beschreibung", "Status", "Priorität", "Fällig", "Wiederholend"], tablefmt="grid"))
             else:
