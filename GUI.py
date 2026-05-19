@@ -243,7 +243,7 @@ class DevPulsePlanner(tk.Tk):
                 "text_main": "#E6EDF3", "text_sub": "#8B949E", "text_inv": "#E6EDF3",
                 "accent": "#58A6FF", "accent2": "#3FB950", "card": "#161B22",
                 "card_hover": "#1C2128", "border": "#30363D", "border_focus": "#58A6FF",
-                "topbar": "#010409", "col_open": "#161B22", "col_wip": "#1C1811", "col_done": "#0F1A12",
+                "topbar": "#0D1117", "col_open": "#161B22", "col_wip": "#1C1811", "col_done": "#0F1A12",
                 "tag_high": "#FF4D6D", "tag_med": "#FF9A3C", "tag_low": "#58A6FF",
                 "shadow": "#00000040", "btn_add": "#238636", "btn_demo": "#6E40C9", "btn_theme": "#30363D",
                 "badge_open": "#1D4ED8", "badge_wip": "#D97706", "badge_done": "#059669",
