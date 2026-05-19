@@ -437,19 +437,17 @@ class DevPulsePlanner(tk.Tk):
                 Tooltip(btn, tooltip_text, bg=colors["topbar"], fg=colors["text_inv"])
             return btn
 
-        styled_btn("➕  Neue Aufgabe", colors["btn_add"], self._add_demo_task, "Demo-Aufgabe hinzufügen")
+        styled_btn("➕  Neue Aufgabe", colors["btn_add"], self._add_task_dialog)
         styled_btn("🎲  Demo laden", colors["btn_demo"], self._load_demo, "Beispieldaten laden")
         styled_btn("🌙  Theme wechseln", colors["btn_theme"], self.toggle_theme, "Hell / Dunkel umschalten")
         tk.Label(parent, text="F11 Vollbild · ESC Beenden", font=("Segoe UI", 7), bg=colors["sidebar"], fg=colors["text_sub"]).pack(pady=(10, 0))
 
     def _build_topbar(self, topbar):
         colors = self.themes[self.current_theme]
-        tk.Label(topbar, text="Sprint Board", font=("Segoe UI Semibold", 12), bg=colors["topbar"], fg="#FFFFFF").pack(side="left", padx=16, pady=18)
+        tk.Label(topbar, font=("Segoe UI Semibold", 12), bg=colors["topbar"], fg="#FFFFFF").pack(side="left", padx=16, pady=18)
         right = tk.Frame(topbar, bg=colors["topbar"])
         right.pack(side="right", padx=16)
-        tk.Button(right, text="➕ Task", command=self._add_task_dialog, font=self.FONT_BADGE, bg=colors["btn_add"], fg="#FFFFFF", relief="flat", padx=10, pady=6, cursor="hand2").pack(side="left", padx=4)
-        tk.Button(right, text="🔄 Refresh", command=self.refresh_board, font=self.FONT_BADGE, bg=colors["btn_theme"], fg="#FFFFFF", relief="flat", padx=10, pady=6, cursor="hand2").pack(side="left", padx=4)
-
+        
     def _build_board_columns_once(self, cols_frame):
         colors = self.themes[self.current_theme]
         self._drop_zones = {}
