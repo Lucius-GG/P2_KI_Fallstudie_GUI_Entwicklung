@@ -53,7 +53,13 @@ class PlannerController:
         self.manager.erledigt_setzen(task_id)
         if self.view:
             self.view.refresh_board()
-    
+
+    def bearbeitung_task(self, task_id: int):
+        """Markiert eine Aufgabe als bearbeitet"""
+        self.manager.bearbeitung_setzen(task_id)
+        if self.view:
+            self.view.refresh_board()
+
     def delete_task(self, task_id: int):
         """Löscht eine Aufgabe"""
         self.manager.aufgabe_entfernen(task_id)

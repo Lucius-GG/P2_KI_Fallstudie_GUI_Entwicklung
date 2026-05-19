@@ -40,6 +40,13 @@ class AufgabenManager:
             return True
         return False
 
+    def bearbeitung_setzen(self, id):
+        """Markiert eine Aufgabe als bearbeitet"""
+        if id in self.aufgaben:
+            self.aufgaben[id].set_status("in_bearbeitung")
+            return True
+        return False
+
     def prioritaet_setzen(self, id, prioritaet):
         """Setzt die Priorität einer Aufgabe"""
         if id in self.aufgaben and hasattr(self.aufgaben[id], "set_prio"):

@@ -609,7 +609,10 @@ class DevPulsePlanner(tk.Tk):
         footer.pack(fill="x")
         date_label = tk.Label(footer, text=f"📅 {data['date']}", font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"])
         date_label.pack(side="left")
+        
         tk.Button(footer, text="✓ Erledigt", font=("Segoe UI Bold", 7), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", bd=0, padx=7, pady=2, cursor="hand2", command=lambda tid=task_id: self._complete_task(tid)).pack(side="right")
+        tk.Button(footer, text="X Bearbeiten", font=("Segoe UI Bold", 7), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", bd=0, padx=7, pady=2, cursor="hand2", command=lambda tid=task_id: self._bearbeitung_task(tid)).pack(side="right", padx=(0, 10))
+
         self._card_widgets[task_id] = {"outer": outer, "card": card, "status": current_status, "data": data.copy(), "labels": {"prio": prio_label, "title": title_label, "desc": desc_label, "date": date_label}}
         self._bind_card_drag(card, task_id, data["title"], current_status, root_card=card, card_info=data.copy())
 
@@ -665,6 +668,10 @@ class DevPulsePlanner(tk.Tk):
 
     def _complete_task(self, task_id):
         self.controller.complete_task(task_id)
+        self.refresh_board()
+
+    def _bearbeitung_task(self, task_id):
+        self.controller.bearbeitung_task(task_id)
         self.refresh_board()
 
     def _bind_card_drag(self, widget, task_id, title, current_status, root_card=None, card_info=None):
