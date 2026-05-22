@@ -1,7 +1,6 @@
 import tkinter as tk
 import ctypes
 from datetime import datetime
-from PIL import Image, ImageTk
 from Controller import PlannerController
 
 # =============================================================================
@@ -372,19 +371,19 @@ class DevPulsePlanner(tk.Tk):
 
     def _draw_logo(self, parent):
         colors = self.themes[self.current_theme]
-        try:
-            img = Image.open("Logo.png").resize((32, 32), Image.Resampling.LANCZOS)
-            self.logo_tk = ImageTk.PhotoImage(img)
-            tk.Label(parent, image=self.logo_tk, bg=colors["sidebar_top"], bd=0).pack(side="left", padx=(16, 8), pady=20)
-        except Exception:
-            cv = tk.Canvas(parent, width=32, height=32, bg=colors["sidebar_top"], highlightthickness=0)
-            cv.pack(side="left", padx=(16, 8), pady=20)
-            cv.create_oval(2, 2, 30, 30, fill=colors["accent"], outline="")
-            cv.create_text(16, 16, text="D", fill="white", font=("Segoe UI Black", 14))
+        cv = tk.Canvas(parent, width=32, height=32,
+                       bg=colors["sidebar_top"], highlightthickness=0)
+        cv.pack(side="left", padx=(16, 8), pady=20)
+        cv.create_oval(2, 2, 30, 30, fill=colors["accent"], outline="")
+        cv.create_text(16, 16, text="D", fill="white",
+                       font=("Segoe UI Black", 14))
+
         name = tk.Frame(parent, bg=colors["sidebar_top"])
         name.pack(side="left")
-        tk.Label(name, text="Dev", font=("Segoe UI Black", 15), bg=colors["sidebar_top"], fg=colors["accent"]).pack(side="left")
-        tk.Label(name, text="Pulse", font=("Segoe UI Semibold", 15), bg=colors["sidebar_top"], fg="#FFFFFF").pack(side="left")
+        tk.Label(name, text="Dev", font=("Segoe UI Black", 15),
+                 bg=colors["sidebar_top"], fg=colors["accent"]).pack(side="left")
+        tk.Label(name, text="Pulse", font=("Segoe UI Semibold", 15),
+                 bg=colors["sidebar_top"], fg="#FFFFFF").pack(side="left")
 
     def _build_nav(self, parent):
         for icon, label, active in [("📋", "Board", True), ("📈", "Analysen", False), ("🗓️", "Kalender", False), ("⚙️", "Einstellungen", False)]:
@@ -958,7 +957,7 @@ class DevPulsePlanner(tk.Tk):
     def _add_task_dialog(self):
         win = tk.Toplevel(self)
         win.title("Neue Aufgabe")
-        win.geometry("420x500")
+        win.geometry("420x600")
         win.resizable(False, False)
         win.grab_set()
         win.transient(self)
@@ -981,14 +980,35 @@ class DevPulsePlanner(tk.Tk):
         prio_frame.pack(anchor="w", **pad)
         for label, value, color in [("● Low", 1, colors["tag_low"]), ("● Medium", 3, colors["tag_med"]), ("● High", 5, colors["tag_high"] )]:
             tk.Radiobutton(prio_frame, text=label, variable=prio_var, value=value, font=("Segoe UI Bold", 9), bg=colors["card"], fg=color, activebackground=colors["card"], selectcolor=colors["card"]).pack(side="left", padx=(0, 10))
+        
+        tk.Label(win, text="Datum (TT.MM.JJ)", font=self.FONT_SMALL, bg=colors["card"], fg=colors["text_sub"]).pack(anchor="w", **pad)
+        date_var = tk.StringVar()
+
+        date_entry = tk.Entry(
+            win,
+            textvariable=date_var,
+            font=self.FONT_BODY,
+            bg=colors["bg"],
+            fg=colors["text_main"],
+            relief="flat",
+            insertbackground=colors["accent"],
+            bd=1,
+            highlightthickness=1,
+            highlightbackground=colors["border"],
+            highlightcolor=colors["border_focus"])
+        
+        date_entry.pack(fill="x", **pad, ipady=6)
+        
+
 
         def submit():
+            date_obj = datetime.strptime(date_var.get(), "%d.%m.%Y")
             title = title_var.get().strip()
             if not title:
                 title_entry.config(highlightbackground=colors["tag_high"])
                 return
             desc = desc_text.get("1.0", "end").strip()
-            self.controller.add_task(title, desc, prio=prio_var.get())
+            self.controller.add_task(title, desc, prio=prio_var.get(), faellig= date_obj)
             win.destroy()
             self.refresh_board()
 
