@@ -4,7 +4,7 @@
             "id": 1,
             "titel": "GUI Refinement",
             "beschreibung": "Logo auf Vektor-Basis umgestellt",
-            "status": "in_bearbeitung",
+            "status": "offen",
             "prio": 5,
             "faelligkeit": "2026-05-23",
             "verbleibend": null,
@@ -15,7 +15,7 @@
             "id": 2,
             "titel": "KI Fallstudie",
             "beschreibung": "Integration der ToDoListeKlassen",
-            "status": "offen",
+            "status": "erledigt",
             "prio": 3,
             "faelligkeit": "2026-05-29",
             "verbleibend": null,
@@ -37,7 +37,7 @@
             "id": 4,
             "titel": "Testing",
             "beschreibung": "Unit Tests für Manager schreiben",
-            "status": "offen",
+            "status": "erledigt",
             "prio": 3,
             "faelligkeit": "2026-06-01",
             "verbleibend": null,
@@ -48,7 +48,7 @@
             "id": 5,
             "titel": "hhdd",
             "beschreibung": "dd",
-            "status": "offen",
+            "status": "in_bearbeitung",
             "prio": 3,
             "faelligkeit": "2026-05-22",
             "verbleibend": null,
@@ -56,5 +56,17 @@
             "wiederholung_intervall": null
         }
     ],
-    "geloescht": []
+    "geloescht": [
+        {
+            "id": 6,
+            "titel": "mate",
+            "beschreibung": "ef",
+            "status": "offen",
+            "prio": null,
+            "faelligkeit": null,
+            "verbleibend": null,
+            "wiederholung": false,
+            "wiederholung_intervall": null
+        }
+    ]
 }

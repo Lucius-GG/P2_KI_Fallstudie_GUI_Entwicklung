@@ -1129,19 +1129,31 @@ class DevPulsePlanner(tk.Tk):
             highlightcolor=colors["border_focus"])
         
         date_entry.pack(fill="x", **pad, ipady=6)
-        
 
 
         def submit():
-            date_obj = datetime.strptime(date_var.get(), "%d.%m.%Y")
             title = title_var.get().strip()
             if not title:
                 title_entry.config(highlightbackground=colors["tag_high"])
                 return
+
             desc = desc_text.get("1.0", "end").strip()
-            self.controller.add_task(title, desc, prio=prio_var.get(), faellig= date_obj)
+
+            date_input = date_var.get().strip()
+
+            if not date_input:
+                date_obj = None
+            else:
+                try:
+                    date_obj = datetime.strptime(date_input, "%d.%m.%Y")
+                except ValueError:
+                    date_entry.config(highlightbackground=colors["tag_high"])
+                    return
+
+            self.controller.add_task(title, desc, prio=prio_var.get(), faellig=date_obj)
             win.destroy()
             self.refresh_board()
+
 
         tk.Frame(win, bg=colors["border"], height=1).pack(fill="x", padx=24, pady=(10, 0))
         btn_row = tk.Frame(win, bg=colors["card"])
