@@ -80,8 +80,8 @@ class AufgabenManager:
             if hasattr(a, "get_verbleibend")
             else None,
 
-            "wiederholung": a.ist_wiederholend()
-            if hasattr(a, "ist_wiederholend")
+            "wiederholung": a.get_wiederholung()
+            if hasattr(a, "get_wiederholung")
             else False,
 
             "wiederholung_intervall": a.get_wiederholung_intervall()
@@ -96,24 +96,23 @@ class AufgabenManager:
     def dict_to_obj(self, d):
 
         if d.get("faelligkeit") is not None or d.get("prio") is not None:
+            datum = None
+            if d.get("faelligkeit"):
+                try:
+                    datum = datetime.strptime(d["faelligkeit"], "%Y-%m-%d")
+                except ValueError:
+                    datum = None
+
             aufgabe = x.TerminierteAufgabe(
                 d["id"],
                 d["titel"],
                 d["beschreibung"],
                 d.get("status", "offen"),
                 d.get("prio", 1),
-                None,
-                d.get("verbleibend", None),
+                datum,
                 d.get("wiederholung", False),
                 d.get("wiederholung_intervall", None)
             )
-
-            if d.get("faelligkeit"):
-                try:
-                    datum = datetime.strptime(d["faelligkeit"], "%Y-%m-%d")
-                    aufgabe.set_faelligkeitsdatum(datum)
-                except ValueError:
-                    pass
 
         else:
             aufgabe = x.EinfacheAufgabe(
@@ -150,6 +149,14 @@ class AufgabenManager:
         else:
             print(f"Aufgabe {id} existiert nicht.")
 
+    def bearbeitung_setzen(self, id):
+        """Setzt Aufgabe auf 'in_bearbeitung'"""
+        if id in self.aufgaben:
+            self.aufgaben[id].set_status("in_bearbeitung")
+            self.speichere_daten()
+        else:
+            print(f"Aufgabe {id} existiert nicht.")
+
     def prioritaet_setzen(self, id, prioritaet):
         if id in self.aufgaben and hasattr(self.aufgaben[id], "set_prio"):
             try:
@@ -169,15 +176,19 @@ class AufgabenManager:
 
     def nach_prioritaet_filtern(self, prioritaet):
         return [
-            str(a)
+            a
             for a in self.aufgaben.values()
             if hasattr(a, "get_prio") and a.get_prio() == prioritaet
         ]
 
+    def nach_status_filtern(self, status):
+        """Filtert Aufgaben nach Status"""
+        return [a for a in self.aufgaben.values() if a.get_status() == status]
+
     def suche(self, suchwort):
         return [
-            str(a)
+            a
             for a in self.aufgaben.values()
             if suchwort.lower() in a.get_titel().lower()
-            or suchwort.lower() in a.get_beschreibung().lower()
+            or suchwort.lower() in (a.get_beschreibung() or "").lower()
         ]

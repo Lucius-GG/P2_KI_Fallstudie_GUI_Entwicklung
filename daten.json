@@ -2,8 +2,30 @@
     "aufgaben": [
         {
             "id": 1,
-            "titel": "Staubsaugen",
-            "beschreibung": "Wohnzimmer staubsaugen",
+            "titel": "GUI Refinement",
+            "beschreibung": "Logo auf Vektor-Basis umgestellt",
+            "status": "in_bearbeitung",
+            "prio": 5,
+            "faelligkeit": "2026-05-23",
+            "verbleibend": null,
+            "wiederholung": false,
+            "wiederholung_intervall": null
+        },
+        {
+            "id": 2,
+            "titel": "KI Fallstudie",
+            "beschreibung": "Integration der ToDoListeKlassen",
+            "status": "offen",
+            "prio": 3,
+            "faelligkeit": "2026-05-29",
+            "verbleibend": null,
+            "wiederholung": false,
+            "wiederholung_intervall": null
+        },
+        {
+            "id": 3,
+            "titel": "DPI Bugfix",
+            "beschreibung": "High-DPI Awareness für Windows 11",
             "status": "erledigt",
             "prio": 1,
             "faelligkeit": "2026-05-21",
@@ -12,36 +34,14 @@
             "wiederholung_intervall": null
         },
         {
-            "id": 2,
-            "titel": "Mathe lernen",
-            "beschreibung": "Aufgabenblatt 3",
-            "status": "erledigt",
+            "id": 4,
+            "titel": "Testing",
+            "beschreibung": "Unit Tests für Manager schreiben",
+            "status": "offen",
             "prio": 3,
-            "faelligkeit": "2025-12-01",
+            "faelligkeit": "2026-06-01",
             "verbleibend": null,
             "wiederholung": false,
-            "wiederholung_intervall": null
-        },
-        {
-            "id": 3,
-            "titel": "Einkaufen",
-            "beschreibung": "Milch+Brot kaufen",
-            "status": "offen",
-            "prio": 5,
-            "faelligkeit": "2026-05-24",
-            "verbleibend": null,
-            "wiederholung": true,
-            "wiederholung_intervall": null
-        },
-        {
-            "id": 4,
-            "titel": "Test",
-            "beschreibung": "Test",
-            "status": "erledigt",
-            "prio": 1,
-            "faelligkeit": "2025-11-23",
-            "verbleibend": null,
-            "wiederholung": true,
             "wiederholung_intervall": null
         }
     ],

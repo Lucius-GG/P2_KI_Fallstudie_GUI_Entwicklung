@@ -247,7 +247,6 @@ class DevPulsePlanner(tk.Tk):
                 "tag_high": "#FF4D6D", "tag_med": "#FF9A3C", "tag_low": "#58A6FF",
                 "shadow": "#00000040", "btn_add": "#238636", "btn_demo": "#6E40C9", "btn_theme": "#30363D",
                 "badge_open": "#1D4ED8", "badge_wip": "#D97706", "badge_done": "#059669",
-                # Screenshot-Fix: Scrollbar-Spur passt jetzt zur dunklen Spalte, Thumb ist nur leicht heller.
                 "scrollbar_thumb": "#47515C", "scrollbar_trough": "#161B22", "scrollbar_active": "#6B7785",
             },
         }
@@ -255,6 +254,7 @@ class DevPulsePlanner(tk.Tk):
         self.ui_elements = {}
         self.card_images = []
         self._task_count = {"offen": 0, "in_bearbeitung": 0, "erledigt": 0}
+        self.current_view = "Board"
 
         # Performance-Caches
         self._drop_zones = {}
@@ -317,10 +317,29 @@ class DevPulsePlanner(tk.Tk):
         tk.Label(search_inner, text="🔍", font=self.FONT_BODY, bg=colors["card"], fg=colors["text_sub"]).pack(side="left", padx=(8, 4), pady=6)
 
         self.search_var = tk.StringVar(value="Suchen…")
-        search_entry = tk.Entry(search_inner, textvariable=self.search_var, font=self.FONT_SMALL, bg=colors["card"], fg=colors["text_main"], relief="flat", bd=0, insertbackground=colors["accent"])
+        search_entry = tk.Entry(search_inner, textvariable=self.search_var, font=self.FONT_SMALL, bg=colors["card"], fg=colors["text_sub"], relief="flat", bd=0, insertbackground=colors["accent"])
         search_entry.pack(side="left", fill="x", expand=True, pady=6, padx=(0, 8))
-        search_entry.bind("<FocusIn>", self._clear_search_placeholder)
-        search_entry.bind("<FocusOut>", self._restore_search_placeholder)
+        
+        def on_focus_in(event=None):
+            if self.search_var.get() == "Suchen…":
+                self.search_var.set("")
+                search_entry.config(fg=colors["text_main"])
+        
+        def on_focus_out(event=None):
+            current_text = self.search_var.get().strip()
+            if not current_text:
+                self.search_var.set("Suchen…")
+                search_entry.config(fg=colors["text_sub"])
+        
+        search_entry.bind("<FocusIn>", on_focus_in)
+        search_entry.bind("<FocusOut>", on_focus_out)
+        
+        def global_focus_handler(event=None):
+            if event and event.widget != search_entry and not self._is_child_of(event.widget, search_entry):
+                search_entry.master.focus()
+        
+        self.bind("<Button-1>", global_focus_handler, add="+")
+        
         self.search_var.trace_add("write", self._on_search)
         self.ui_elements["search_entry"] = search_entry
 
@@ -370,6 +389,17 @@ class DevPulsePlanner(tk.Tk):
         self.ui_elements["cols_frame"] = cols_frame
         self._build_board_columns_once(cols_frame)
 
+        if getattr(self, "current_view", "Board") != "Board":
+            self._switch_view(self.current_view)
+
+    def _is_child_of(self, widget, parent):
+        current = widget
+        while current:
+            if current == parent:
+                return True
+            current = current.master if hasattr(current, 'master') else None
+        return False
+
     def _draw_logo(self, parent):
         colors = self.themes[self.current_theme]
         try:
@@ -387,7 +417,9 @@ class DevPulsePlanner(tk.Tk):
         tk.Label(name, text="Pulse", font=("Segoe UI Semibold", 15), bg=colors["sidebar_top"], fg="#FFFFFF").pack(side="left")
 
     def _build_nav(self, parent):
-        for icon, label, active in [("📋", "Board", True), ("📈", "Analysen", False), ("🗓️", "Kalender", False), ("⚙️", "Einstellungen", False)]:
+        self._nav_items = {} 
+        for icon, label in [("📋", "Board"), ("📈", "Analysen"), ("🗓️", "Kalender"), ("⚙️", "Einstellungen")]:
+            active = (label == getattr(self, "current_view", "Board"))
             self._make_nav_item(parent, icon, label, active)
 
     def _make_nav_item(self, parent, icon, label, active):
@@ -395,17 +427,73 @@ class DevPulsePlanner(tk.Tk):
         bg = colors["col_open"] if active else colors["sidebar"]
         fg = colors["accent"] if active else colors["text_sub"]
         bar_color = colors["accent"] if active else colors["sidebar"]
+        
         row = tk.Frame(parent, bg=bg, cursor="hand2")
         row.pack(fill="x", padx=8, pady=2)
-        tk.Frame(row, bg=bar_color, width=3).pack(side="left", fill="y")
-        tk.Label(row, text=f"  {icon}  {label}", font=self.FONT_NAV, bg=bg, fg=fg, anchor="w").pack(side="left", fill="x", expand=True, ipady=11, padx=4)
+        
+        bar = tk.Frame(row, bg=bar_color, width=3)
+        bar.pack(side="left", fill="y")
+        
+        lbl = tk.Label(row, text=f"  {icon}  {label}", font=self.FONT_NAV, bg=bg, fg=fg, anchor="w")
+        lbl.pack(side="left", fill="x", expand=True, ipady=11, padx=4)
+
+        for widget in (row, bar, lbl):
+            widget.bind("<Button-1>", lambda e, l=label: self._switch_view(l))
+
+        self._nav_items[label] = {"row": row, "bar": bar, "lbl": lbl, "icon": icon}
+
+    def _switch_view(self, view_name):
+        self.current_view = view_name
+        colors = self.themes[self.current_theme]
+
+        # 1. Sidebar visuell aktualisieren
+        for name, widgets in self._nav_items.items():
+            active = (name == view_name)
+            bg = colors["col_open"] if active else colors["sidebar"]
+            fg = colors["accent"] if active else colors["text_sub"]
+            bar_color = colors["accent"] if active else colors["sidebar"]
+
+            widgets["row"].config(bg=bg)
+            widgets["bar"].config(bg=bar_color)
+            widgets["lbl"].config(bg=bg, fg=fg)
+
+        # 2. Hauptbereich umschalten
+        board_outer = self.ui_elements.get("board_outer")
+        
+        if view_name == "Board":
+            if hasattr(self, "placeholder_outer") and self.placeholder_outer.winfo_exists():
+                self.placeholder_outer.pack_forget()
+            if board_outer:
+                board_outer.pack(fill="both", expand=True)
+        else:
+            if board_outer:
+                board_outer.pack_forget()
+
+            if hasattr(self, "placeholder_outer") and self.placeholder_outer.winfo_exists():
+                self.placeholder_outer.destroy()
+
+            self.placeholder_outer = tk.Frame(self.main_area, bg=colors["bg"])
+            self.placeholder_outer.pack(fill="both", expand=True)
+
+            board_padding = 16
+            header_outer = tk.Frame(self.placeholder_outer, bg=colors["bg"])
+            header_outer.pack(fill="x", padx=board_padding, pady=(20, 0))
+            tk.Label(header_outer, text=view_name, font=("Segoe UI Black", 20), bg=colors["bg"], fg=colors["text_main"]).pack(side="left")
+            tk.Frame(self.placeholder_outer, bg=colors["border"], height=1).pack(fill="x", padx=board_padding, pady=(8, 10))
+
+            content = tk.Frame(self.placeholder_outer, bg=colors["bg"])
+            content.pack(fill="both", expand=True)
+            tk.Label(content, text="Coming Soon", font=("Segoe UI Black", 36), bg=colors["bg"], fg=colors["text_sub"]).pack(expand=True)
 
     def _build_stats_once(self, parent):
         colors = self.themes[self.current_theme]
         self._stat_value_labels = {}
+        self._overdue_label = None
         for child in parent.winfo_children():
             child.destroy()
+        
         tk.Label(parent, text="ÜBERSICHT", font=self.FONT_BADGE, bg=colors["sidebar"], fg=colors["text_sub"]).pack(anchor="w", pady=(0, 8))
+        
         stat_row = tk.Frame(parent, bg=colors["sidebar"])
         stat_row.pack(fill="x")
         for index, (status_key, label, color) in enumerate([
@@ -419,13 +507,47 @@ class DevPulsePlanner(tk.Tk):
             value_lbl.pack(pady=(8, 0))
             tk.Label(cell, text=label, font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"]).pack(pady=(0, 6))
             self._stat_value_labels[status_key] = value_lbl
+        
         self.ui_elements["stat_row"] = stat_row
+        
+        tk.Label(parent, text="ÜBERFÄLLIG", font=self.FONT_BADGE, bg=colors["sidebar"], fg=colors["text_sub"]).pack(anchor="w", pady=(12, 8))
+        
+        overdue_cell = tk.Frame(parent, bg=colors["card"], highlightbackground=colors["border"], highlightthickness=1)
+        overdue_cell.pack(fill="x")
+        self._overdue_label = tk.Label(overdue_cell, text="0", font=("Segoe UI Black", 18), bg=colors["card"], fg=colors["text_sub"])
+        self._overdue_label.pack(pady=(8, 6))
 
     def _update_stats_only(self):
         for status, value in self._task_count.items():
             label = getattr(self, "_stat_value_labels", {}).get(status)
             if label and label.winfo_exists():
                 label.config(text=str(value))
+        
+        overdue_count = self._count_overdue_tasks()
+        colors = self.themes[self.current_theme]
+        
+        if self._overdue_label and self._overdue_label.winfo_exists():
+            self._overdue_label.config(text=str(overdue_count))
+            if overdue_count > 0:
+                self._overdue_label.config(fg=colors["tag_high"]) 
+                self._overdue_label.master.config(highlightbackground=colors["tag_high"])
+            else:
+                self._overdue_label.config(fg=colors["text_sub"]) 
+                self._overdue_label.master.config(highlightbackground=colors["border"])
+
+    def _count_overdue_tasks(self):
+        overdue = 0
+        today = datetime.now().date()
+        
+        for status in ["offen", "in_bearbeitung"]:
+            tasks = self.controller.get_tasks_by_status(status)
+            for task in tasks:
+                if hasattr(task, "get_faelligkeitsdatum") and task.get_faelligkeitsdatum():
+                    task_date = task.get_faelligkeitsdatum().date()
+                    if task_date < today:
+                        overdue += 1
+        
+        return overdue
 
     def _build_sidebar_buttons(self, parent):
         colors = self.themes[self.current_theme]
@@ -448,6 +570,13 @@ class DevPulsePlanner(tk.Tk):
         right = tk.Frame(topbar, bg=colors["topbar"])
         right.pack(side="right", padx=16)
         
+        def remove_search_focus(event=None):
+            search_entry = self.ui_elements.get("search_entry")
+            if search_entry and search_entry.focus_get() == search_entry:
+                topbar.focus()
+        
+        topbar.bind("<Button-1>", remove_search_focus, add="+")
+
     def _build_board_columns_once(self, cols_frame):
         colors = self.themes[self.current_theme]
         self._drop_zones = {}
@@ -607,11 +736,14 @@ class DevPulsePlanner(tk.Tk):
         tk.Frame(card, bg=colors["border"], height=1).pack(fill="x", pady=(4, 6))
         footer = tk.Frame(card, bg=colors["card"])
         footer.pack(fill="x")
-        date_label = tk.Label(footer, text=f"📅 {data['date']}", font=self.FONT_MICRO, bg=colors["card"], fg=colors["text_sub"])
+        
+        date_bg = self._get_date_display_bg(data["task_id"], data["date"])
+        date_fg = self._get_date_display_color(data["task_id"], data["date"])
+        date_label = tk.Label(footer, text=f"📅 {data['date']}", font=self.FONT_MICRO, bg=date_bg, fg=date_fg, relief="solid" if date_bg != colors["card"] else "flat", bd=1 if date_bg != colors["card"] else 0, padx=4, pady=2)
         date_label.pack(side="left")
         
-        tk.Button(footer, text="✓ Erledigt", font=("Segoe UI Bold", 7), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", bd=0, padx=7, pady=2, cursor="hand2", command=lambda tid=task_id: self._complete_task(tid)).pack(side="right")
-        tk.Button(footer, text="X Bearbeiten", font=("Segoe UI Bold", 7), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", bd=0, padx=7, pady=2, cursor="hand2", command=lambda tid=task_id: self._bearbeitung_task(tid)).pack(side="right", padx=(0, 10))
+        tk.Button(footer, text="✓ Erledigt", font=("Segoe UI Bold", 7), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", bd=0, padx=7, pady=2, cursor="hand2", command=lambda tid=task_id: self._complete_task(tid)).pack(side="right", padx=(4, 0))
+        tk.Button(footer, text="✎ Bearbeiten", font=("Segoe UI Bold", 7), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", bd=0, padx=7, pady=2, cursor="hand2", command=lambda tid=task_id: self._bearbeitung_task(tid)).pack(side="right", padx=(0, 4))
 
         self._card_widgets[task_id] = {"outer": outer, "card": card, "status": current_status, "data": data.copy(), "labels": {"prio": prio_label, "title": title_label, "desc": desc_label, "date": date_label}}
         self._bind_card_drag(card, task_id, data["title"], current_status, root_card=card, card_info=data.copy())
@@ -1003,8 +1135,57 @@ class DevPulsePlanner(tk.Tk):
         self.refresh_board()
 
     def _load_demo(self):
+        all_task_ids = list(self.controller.manager.aufgaben.keys())
+        for task_id in all_task_ids:
+            self.controller.manager.aufgabe_entfernen(task_id)
+        
+        self.controller.manager.geloescht.clear()
+        self.controller.manager.speichere_daten()
+        
         self.controller.load_demo_data()
         self.refresh_board()
+
+    def _get_date_display_color(self, task_id, date_str):
+        colors = self.themes[self.current_theme]
+        
+        task = self._find_task_by_id(task_id)
+        if task and task.get_status() == "erledigt":
+            return colors["text_sub"]
+        
+        if date_str == "–":
+            return colors["text_sub"]
+        
+        try:
+            task_date = datetime.strptime(date_str, "%d.%m.%Y").date()
+            today = datetime.now().date()
+            
+            if task_date < today:
+                return colors["tag_high"]
+            
+            return colors["text_sub"]
+        except ValueError:
+            return colors["text_sub"]
+
+    def _get_date_display_bg(self, task_id, date_str):
+        colors = self.themes[self.current_theme]
+        
+        task = self._find_task_by_id(task_id)
+        if task and task.get_status() == "erledigt":
+            return colors["card"]
+        
+        if date_str == "–":
+            return colors["card"]
+        
+        try:
+            task_date = datetime.strptime(date_str, "%d.%m.%Y").date()
+            today = datetime.now().date()
+            
+            if task_date < today:
+                return "#FFE5E5" if self.current_theme == "light" else "#3D1F1F"
+            
+            return colors["card"]
+        except ValueError:
+            return colors["card"]
 
     def toggle_theme(self):
         self.current_theme = "dark" if self.current_theme == "light" else "light"
