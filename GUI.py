@@ -1089,7 +1089,7 @@ class DevPulsePlanner(tk.Tk):
     def _add_task_dialog(self):
         win = tk.Toplevel(self)
         win.title("Neue Aufgabe")
-        win.geometry("420x600")
+        win.geometry("480x600")
         win.resizable(False, False)
         win.grab_set()
         win.transient(self)
@@ -1129,16 +1129,21 @@ class DevPulsePlanner(tk.Tk):
             highlightcolor=colors["border_focus"])
         
         date_entry.pack(fill="x", **pad, ipady=6)
+    
+        error_label = tk.Label(
+            win, text="", font=("Segoe UI", 9, "italic"), fg="#FF4D6D",bg=colors["card"])
+        error_label.pack(anchor="w", padx=24, pady=(0, 6))
 
 
         def submit():
+            error_label.config(text="")  # Fehler zurücksetzen
+
             title = title_var.get().strip()
             if not title:
                 title_entry.config(highlightbackground=colors["tag_high"])
                 return
 
             desc = desc_text.get("1.0", "end").strip()
-
             date_input = date_var.get().strip()
 
             if not date_input:
@@ -1148,12 +1153,19 @@ class DevPulsePlanner(tk.Tk):
                     date_obj = datetime.strptime(date_input, "%d.%m.%Y")
                 except ValueError:
                     date_entry.config(highlightbackground=colors["tag_high"])
+                    error_label.config(
+                        text="Ungültige Eingabe – bitte nach dem Schema TT.MM.JJ eingeben!"
+                    )
                     return
 
-            self.controller.add_task(title, desc, prio=prio_var.get(), faellig=date_obj)
+            self.controller.add_task(
+                title,
+                desc,
+                prio=prio_var.get(),
+                faellig=date_obj
+            )
             win.destroy()
             self.refresh_board()
-
 
         tk.Frame(win, bg=colors["border"], height=1).pack(fill="x", padx=24, pady=(10, 0))
         btn_row = tk.Frame(win, bg=colors["card"])
