@@ -1112,7 +1112,7 @@ class DevPulsePlanner(tk.Tk):
         prio_frame.pack(anchor="w", **pad)
         for label, value, color in [("● Low", 1, colors["tag_low"]), ("● Medium", 3, colors["tag_med"]), ("● High", 5, colors["tag_high"] )]:
             tk.Radiobutton(prio_frame, text=label, variable=prio_var, value=value, font=("Segoe UI Bold", 9), bg=colors["card"], fg=color, activebackground=colors["card"], selectcolor=colors["card"]).pack(side="left", padx=(0, 10))
-        tk.Label(win, text="Datum (TT.MM.JJ)", font=self.FONT_SMALL, bg=colors["card"], fg=colors["text_sub"]).pack(anchor="w", **pad)
+        tk.Label(win, text="Datum (TT.MM.JJ) (optional)", font=self.FONT_SMALL, bg=colors["card"], fg=colors["text_sub"]).pack(anchor="w", **pad)
         date_var = tk.StringVar()
 
         date_entry = tk.Entry(
