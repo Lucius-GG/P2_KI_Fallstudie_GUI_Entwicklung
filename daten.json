@@ -1,0 +1,49 @@
+{
+    "aufgaben": [
+        {
+            "id": 1,
+            "titel": "Staubsaugen",
+            "beschreibung": "Wohnzimmer staubsaugen",
+            "status": "erledigt",
+            "prio": 1,
+            "faelligkeit": "2026-05-21",
+            "verbleibend": null,
+            "wiederholung": false,
+            "wiederholung_intervall": null
+        },
+        {
+            "id": 2,
+            "titel": "Mathe lernen",
+            "beschreibung": "Aufgabenblatt 3",
+            "status": "erledigt",
+            "prio": 3,
+            "faelligkeit": "2025-12-01",
+            "verbleibend": null,
+            "wiederholung": false,
+            "wiederholung_intervall": null
+        },
+        {
+            "id": 3,
+            "titel": "Einkaufen",
+            "beschreibung": "Milch+Brot kaufen",
+            "status": "offen",
+            "prio": 5,
+            "faelligkeit": "2026-05-24",
+            "verbleibend": null,
+            "wiederholung": true,
+            "wiederholung_intervall": null
+        },
+        {
+            "id": 4,
+            "titel": "Test",
+            "beschreibung": "Test",
+            "status": "erledigt",
+            "prio": 1,
+            "faelligkeit": "2025-11-23",
+            "verbleibend": null,
+            "wiederholung": true,
+            "wiederholung_intervall": null
+        }
+    ],
+    "geloescht": []
+}
