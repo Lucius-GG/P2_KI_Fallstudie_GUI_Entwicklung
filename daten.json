@@ -43,6 +43,17 @@
             "verbleibend": null,
             "wiederholung": false,
             "wiederholung_intervall": null
+        },
+        {
+            "id": 5,
+            "titel": "hhdd",
+            "beschreibung": "dd",
+            "status": "offen",
+            "prio": 3,
+            "faelligkeit": "2026-05-22",
+            "verbleibend": null,
+            "wiederholung": false,
+            "wiederholung_intervall": null
         }
     ],
     "geloescht": []
