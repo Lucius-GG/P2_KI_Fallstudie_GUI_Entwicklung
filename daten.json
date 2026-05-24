@@ -6,7 +6,7 @@
             "beschreibung": "Logo auf Vektor-Basis umgestellt",
             "status": "in_bearbeitung",
             "prio": 5,
-            "faelligkeit": "2026-05-23",
+            "faelligkeit": "2026-05-24",
             "verbleibend": null,
             "wiederholung": false,
             "wiederholung_intervall": null
@@ -28,7 +28,7 @@
             "beschreibung": "High-DPI Awareness für Windows 11",
             "status": "erledigt",
             "prio": 1,
-            "faelligkeit": "2026-05-21",
+            "faelligkeit": "2026-05-22",
             "verbleibend": null,
             "wiederholung": false,
             "wiederholung_intervall": null

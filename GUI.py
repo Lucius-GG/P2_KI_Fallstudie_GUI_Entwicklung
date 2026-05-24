@@ -2,9 +2,10 @@ import tkinter as tk
 import ctypes
 from datetime import datetime
 from Controller import PlannerController
+from PIL import Image, ImageTk
 
 # =============================================================================
-# HIGH-DPI SCALING
+# HIGH-DPI SCALING & Icon
 # =============================================================================
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -14,6 +15,12 @@ except Exception:
     except Exception:
         pass
 
+try:
+    # Zwingt Windows dazu, dieses Skript als eigene App mit eigenem Icon in der Taskleiste zu behandeln
+    myappid = "studium.kitstudie.devpulseplanner.v1"
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except Exception:
+    pass
 
 # =============================================================================
 # CUSTOM SCROLLABLE FRAME MIT EIGENER CANVAS-SCROLLBAR
@@ -219,11 +226,20 @@ class DevPulsePlanner(tk.Tk):
         self.minsize(1000, 650)
         self.resizable(True, True)
 
+
         self.bind("<F11>", self._toggle_fullscreen)
         self.bind("<Escape>", self._exit_fullscreen)
         self.is_fullscreen = False
 
         self.controller = PlannerController(view=self)
+
+        #: Fenster-Icon setzen (Ersetzt die Feder)
+        try:
+            icon_image = Image.open("Logo.png")
+            self.app_icon = ImageTk.PhotoImage(icon_image)
+            self.iconphoto(False, self.app_icon)
+        except Exception as e:
+            print(f"Fenster-Icon konnte nicht geladen werden: {e}")
 
         self.themes = {
             "light": {
@@ -305,7 +321,7 @@ class DevPulsePlanner(tk.Tk):
         brand_frame.pack(fill="x")
         brand_frame.pack_propagate(False)
         self.ui_elements["brand_frame"] = brand_frame
-        self._draw_logo(brand_frame)
+        self.load_logo(brand_frame)
 
         search_outer = tk.Frame(self.sidebar, bg=colors["sidebar"], pady=8, padx=12)
         search_outer.pack(fill="x")
@@ -399,15 +415,30 @@ class DevPulsePlanner(tk.Tk):
             current = current.master if hasattr(current, 'master') else None
         return False
 
-    def _draw_logo(self, parent):
+    def load_logo(self, parent):
         colors = self.themes[self.current_theme]
-        cv = tk.Canvas(parent, width=32, height=32,
-                       bg=colors["sidebar_top"], highlightthickness=0)
-        cv.pack(side="left", padx=(16, 8), pady=20)
-        cv.create_oval(2, 2, 30, 30, fill=colors["accent"], outline="")
-        cv.create_text(16, 16, text="D", fill="white",
-                       font=("Segoe UI Black", 14))
+        
+        try:
+            # Bild laden und auf die exakte Größe (32x32 Pixel) skalieren
+            img = Image.open("Logo.png").resize((32, 32), Image.Resampling.LANCZOS)
+            
+            # WICHTIG: Die Referenz an 'self' binden, da Tkinter das Bild sonst 
+            # sofort wieder aus dem Arbeitsspeicher löscht (Garbage Collection)!
+            self.logo_tk = ImageTk.PhotoImage(img)
+            
+            # Das Bild in einem Label anzeigen
+            logo_label = tk.Label(parent, image=self.logo_tk, bg=colors["sidebar_top"], bd=0)
+            logo_label.pack(side="left", padx=(16, 8), pady=20)
+            
+        except Exception as e:
+            # Sicherheits-Fallback, falls die Datei "Logo.png" nicht gefunden wird
+            print(f"Hinweis: Logo.png konnte nicht geladen werden ({e}). Nutze Fallback-Canvas.")
+            cv = tk.Canvas(parent, width=32, height=32, bg=colors["sidebar_top"], highlightthickness=0)
+            cv.pack(side="left", padx=(16, 8), pady=20)
+            cv.create_oval(2, 2, 30, 30, fill=colors["accent"], outline="")
+            cv.create_text(16, 16, text="D", fill="white", font=("Segoe UI Black", 14))
 
+        # Der Text "DevPulse" daneben bleibt unverändert
         name = tk.Frame(parent, bg=colors["sidebar_top"])
         name.pack(side="left")
         tk.Label(name, text="Dev", font=("Segoe UI Black", 15),
