@@ -1,8 +1,10 @@
 import tkinter as tk
+from tkinter import messagebox
 import ctypes
 from datetime import datetime
 from Controller import PlannerController
 from PIL import Image, ImageTk
+import os
 
 # =============================================================================
 # HIGH-DPI SCALING & Icon
@@ -16,7 +18,6 @@ except Exception:
         pass
 
 try:
-    # Zwingt Windows dazu, dieses Skript als eigene App mit eigenem Icon in der Taskleiste zu behandeln
     myappid = "studium.kitstudie.devpulseplanner.v1"
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 except Exception:
@@ -181,7 +182,12 @@ class ScrollableFrame(tk.Frame):
     def _on_mousewheel(self, event):
         bbox = self.canvas.bbox("all")
         if bbox and bbox[3] > self.canvas.winfo_height():
-            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            try:
+                # Standard-Delta (Windows/Mac kompatibel behandeln)
+                delta = -1 * (event.delta // 120) if hasattr(event, "delta") else (1 if event.num == 5 else -1)
+                self.canvas.yview_scroll(delta, "units")
+            except Exception:
+                pass
 
 
 # =============================================================================
@@ -200,16 +206,25 @@ class Tooltip:
     def show(self, event=None):
         if self.tip:
             return
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
-        self.tip = tk.Toplevel(self.widget)
-        self.tip.wm_overrideredirect(True)
-        self.tip.wm_geometry(f"+{x}+{y}")
-        tk.Label(self.tip, text=self.text, bg=self.bg, fg=self.fg, font=("Segoe UI", 9), padx=10, pady=5, relief="flat", bd=0).pack()
+        try:
+            x = self.widget.winfo_rootx() + 20
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        except tk.TclError:
+            return
+        try:
+            self.tip = tk.Toplevel(self.widget)
+            self.tip.wm_overrideredirect(True)
+            self.tip.wm_geometry(f"+{x}+{y}")
+            tk.Label(self.tip, text=self.text, bg=self.bg, fg=self.fg, font=("Segoe UI", 9), padx=10, pady=5, relief="flat", bd=0).pack()
+        except tk.TclError:
+            self.tip = None
 
     def hide(self, event=None):
         if self.tip:
-            self.tip.destroy()
+            try:
+                self.tip.destroy()
+            except tk.TclError:
+                pass
             self.tip = None
 
 
@@ -226,12 +241,12 @@ class DevPulsePlanner(tk.Tk):
         self.minsize(1000, 650)
         self.resizable(True, True)
 
-
         self.bind("<F11>", self._toggle_fullscreen)
         self.bind("<Escape>", self._exit_fullscreen)
         self.is_fullscreen = False
 
-        self.controller = PlannerController(view=self)
+        # Controller so initialisieren, dass er daten.json lädt
+        self.controller = PlannerController(view=self, storage_path=os.path.join(os.path.dirname(__file__), "daten.json"))
 
         #: Fenster-Icon setzen (Ersetzt die Feder)
         try:
@@ -334,27 +349,37 @@ class DevPulsePlanner(tk.Tk):
         self.search_var = tk.StringVar(value="Suchen…")
         search_entry = tk.Entry(search_inner, textvariable=self.search_var, font=self.FONT_SMALL, bg=colors["card"], fg=colors["text_sub"], relief="flat", bd=0, insertbackground=colors["accent"])
         search_entry.pack(side="left", fill="x", expand=True, pady=6, padx=(0, 8))
-        
+
         def on_focus_in(event=None):
-            if self.search_var.get() == "Suchen…":
-                self.search_var.set("")
+            try:
+                if self.search_var.get() == "Suchen…":
+                    self.search_var.set("")
                 search_entry.config(fg=colors["text_main"])
-        
+            except tk.TclError:
+                pass
+
         def on_focus_out(event=None):
-            current_text = self.search_var.get().strip()
-            if not current_text:
-                self.search_var.set("Suchen…")
-                search_entry.config(fg=colors["text_sub"])
-        
+            try:
+                if not self.search_var.get():
+                    self.search_var.set("Suchen…")
+                    search_entry.config(fg=colors["text_sub"])
+            except tk.TclError:
+                pass
+
         search_entry.bind("<FocusIn>", on_focus_in)
         search_entry.bind("<FocusOut>", on_focus_out)
-        
+
         def global_focus_handler(event=None):
-            if event and event.widget != search_entry and not self._is_child_of(event.widget, search_entry):
-                search_entry.master.focus()
-        
+            try:
+                widget = event.widget if event else None
+                # if click outside the search_entry, move focus to the main window safely
+                if widget is not search_entry and not self._is_child_of(widget, search_entry):
+                    self._safe_focus(self)
+            except Exception:
+                pass
+
         self.bind("<Button-1>", global_focus_handler, add="+")
-        
+
         self.search_var.trace_add("write", self._on_search)
         self.ui_elements["search_entry"] = search_entry
 
@@ -408,12 +433,24 @@ class DevPulsePlanner(tk.Tk):
             self._switch_view(self.current_view)
 
     def _is_child_of(self, widget, parent):
+        """Robust check whether widget is a child (or the same) as parent."""
         current = widget
         while current:
             if current == parent:
                 return True
-            current = current.master if hasattr(current, 'master') else None
+            try:
+                current = getattr(current, "master", None)
+            except Exception:
+                break
         return False
+
+    def _safe_focus(self, widget):
+        """Set focus only if widget still exists; suppress TclError."""
+        try:
+            if widget and getattr(widget, "winfo_exists", lambda: False)():
+                widget.focus_set()
+        except tk.TclError:
+            pass
 
     def load_logo(self, parent):
         colors = self.themes[self.current_theme]
@@ -566,18 +603,24 @@ class DevPulsePlanner(tk.Tk):
                 self._overdue_label.master.config(highlightbackground=colors["border"])
 
     def _count_overdue_tasks(self):
-        overdue = 0
-        today = datetime.now().date()
-        
-        for status in ["offen", "in_bearbeitung"]:
-            tasks = self.controller.get_tasks_by_status(status)
-            for task in tasks:
-                if hasattr(task, "get_faelligkeitsdatum") and task.get_faelligkeitsdatum():
-                    task_date = task.get_faelligkeitsdatum().date()
-                    if task_date < today:
-                        overdue += 1
-        
-        return overdue
+        # Use controller's API where possible
+        try:
+            return int(self.controller.get_overdue_count()) if hasattr(self.controller, "get_overdue_count") else 0
+        except Exception:
+            # fallback: compute locally
+            overdue = 0
+            today = datetime.now().date()
+            for status in ["offen", "in_bearbeitung"]:
+                try:
+                    tasks = self.controller.get_tasks_by_status(status)
+                except Exception:
+                    continue
+                for task in tasks:
+                    if hasattr(task, "get_faelligkeitsdatum") and task.get_faelligkeitsdatum():
+                        task_date = task.get_faelligkeitsdatum().date()
+                        if task_date < today:
+                            overdue += 1
+            return overdue
 
     def _build_sidebar_buttons(self, parent):
         colors = self.themes[self.current_theme]
@@ -599,12 +642,16 @@ class DevPulsePlanner(tk.Tk):
         tk.Label(topbar, font=("Segoe UI Semibold", 12), bg=colors["topbar"], fg="#FFFFFF").pack(side="left", padx=16, pady=18)
         right = tk.Frame(topbar, bg=colors["topbar"])
         right.pack(side="right", padx=16)
-        
+
         def remove_search_focus(event=None):
-            search_entry = self.ui_elements.get("search_entry")
-            if search_entry and search_entry.focus_get() == search_entry:
-                topbar.focus()
-        
+            try:
+                search_entry = self.ui_elements.get("search_entry")
+                widget = event.widget if event else None
+                if search_entry and widget is not search_entry and not self._is_child_of(widget, search_entry):
+                    self._safe_focus(self)
+            except Exception:
+                pass
+
         topbar.bind("<Button-1>", remove_search_focus, add="+")
 
     def _build_board_columns_once(self, cols_frame):
@@ -659,37 +706,64 @@ class DevPulsePlanner(tk.Tk):
     def refresh_board(self):
         if not self._column_scrolls:
             return
-        query = self.search_var.get().strip().lower() if hasattr(self, "search_var") else ""
-        if query == "suchen…":
-            query = ""
 
-        def task_matches(task):
-            if not query:
-                return True
-            return query in task.get_titel().lower() or query in (task.get_beschreibung() or "").lower()
+        raw = self.search_var.get().strip() if hasattr(self, "search_var") else ""
+        if raw.lower() == "suchen…":
+            raw = ""
+        query = raw.strip()
 
-        all_existing_ids = set()
-        visible_ids = set()
-        tasks_by_status = {}
-        for status in self.STATUSES:
-            tasks = list(self.controller.get_tasks_by_status(status))
-            tasks_by_status[status] = tasks
-            self._task_count[status] = len([task for task in tasks if task_matches(task)]) if query else len(tasks)
-            for task in tasks:
-                all_existing_ids.add(task.get_id())
+        # obtain a list of all tasks (for existence checks) in a robust way
+        try:
+            all_tasks = list(self.controller.get_all_tasks()) if hasattr(self.controller, "get_all_tasks") else []
+        except Exception:
+            all_tasks = []
+            for status in self.STATUSES:
+                try:
+                    all_tasks.extend(self.controller.get_tasks_by_status(status))
+                except Exception:
+                    pass
+        all_existing_ids = set(t.get_id() for t in all_tasks)
 
+        # build tasks_by_status depending on whether a query is active
+        tasks_by_status = {s: [] for s in self.STATUSES}
+        if query:
+            try:
+                if hasattr(self.controller, "search_tasks"):
+                    matching = list(self.controller.search_tasks(query))
+                else:
+                    ql = query.lower()
+                    matching = [t for t in all_tasks if ql in (t.get_titel() or "").lower() or ql in ((t.get_beschreibung() or "").lower())]
+            except Exception:
+                matching = []
+            for s in self.STATUSES:
+                tasks_by_status[s] = [t for t in matching if getattr(t, "get_status", lambda: "")() == s]
+                self._task_count[s] = len(tasks_by_status[s])
+        else:
+            for status in self.STATUSES:
+                try:
+                    tasks = list(self.controller.get_tasks_by_status(status))
+                except Exception:
+                    tasks = []
+                tasks_by_status[status] = tasks
+                self._task_count[status] = len(tasks)
+
+        # remove widgets for tasks that no longer exist
         for task_id in list(self._card_widgets.keys()):
             if task_id not in all_existing_ids:
                 self._destroy_card_widget(task_id)
 
+        # render / update visible cards
+        visible_ids = set()
         for status in self.STATUSES:
             col_bg = self._get_column_bg(status)
             for task in tasks_by_status[status]:
-                task_id = task.get_id()
-                if not task_matches(task):
-                    self._hide_card(task_id)
+                if task is None:
                     continue
-                visible_ids.add(task_id)
+                task_id = task.get_id()
+                if not task_id:
+                    continue
+                if task_id not in visible_ids:
+                    visible_ids.add(task_id)
                 card_state = self._card_widgets.get(task_id)
                 if card_state is None:
                     self._create_card_from_task(task, status, col_bg)
@@ -700,6 +774,7 @@ class DevPulsePlanner(tk.Tk):
                     self._update_card_content(task_id, task)
                 self._show_card_in_order(task_id)
 
+        # hide cards that exist but are filtered out
         for task_id in list(self._card_widgets.keys()):
             if task_id not in visible_ids:
                 self._hide_card(task_id)
@@ -994,21 +1069,38 @@ class DevPulsePlanner(tk.Tk):
                 zone.config(highlightbackground=colors["border"], highlightthickness=1)
 
     def _move_task_to_status(self, task_id, target_status):
+        """Try controller API first; fall back to specific helpers if available."""
         moved = False
-        if self._call_existing_controller_move_method(task_id, target_status):
-            moved = True
-        else:
-            task = self._find_task_by_id(task_id)
-            if task and self._set_task_status_direct(task, target_status):
-                moved = True
-            elif target_status == "erledigt" and hasattr(self.controller, "complete_task"):
-                self.controller.complete_task(task_id)
-                moved = True
+        try:
+            if hasattr(self.controller, "move_task"):
+                moved = bool(self.controller.move_task(task_id, target_status))
+        except Exception:
+            moved = False
+
+        if not moved:
+            # try specific helpers if implemented
+            try:
+                if target_status == "erledigt" and hasattr(self.controller, "complete_task"):
+                    moved = bool(self.controller.complete_task(task_id))
+                elif target_status == "in_bearbeitung" and hasattr(self.controller, "bearbeitung_task"):
+                    moved = bool(self.controller.bearbeitung_task(task_id))
+            except Exception:
+                moved = False
+
         if moved:
-            self._notify_controller_after_status_change()
+            try:
+                if hasattr(self.controller, "save"):
+                    self.controller.save()
+                elif hasattr(self.controller, "speichere_daten"):
+                    self.controller.speichere_daten()
+            except Exception:
+                pass
             self.refresh_board()
         else:
-            print("Drag & Drop: Status konnte nicht geändert werden. Bitte Controller/Task prüfen.")
+            try:
+                messagebox.showwarning("Verschieben fehlgeschlagen", "Status konnte nicht geändert werden. Bitte Controller prüfen.")
+            except Exception:
+                pass
 
     def _call_existing_controller_move_method(self, task_id, target_status):
         for name in ("move_task", "move_task_to_status", "update_task_status", "set_task_status", "change_task_status", "change_status", "update_status", "set_status"):
@@ -1160,17 +1252,33 @@ class DevPulsePlanner(tk.Tk):
             highlightcolor=colors["border_focus"])
         
         date_entry.pack(fill="x", **pad, ipady=6)
-        
-
 
         def submit():
-            date_obj = datetime.strptime(date_var.get(), "%d.%m.%Y")
             title = title_var.get().strip()
             if not title:
-                title_entry.config(highlightbackground=colors["tag_high"])
+                messagebox.showerror("Ungültiger Titel", "Bitte einen Titel eingeben.")
+                try:
+                    title_entry.focus_set()
+                except Exception:
+                    pass
                 return
+            date_obj = None
+            date_text = date_var.get().strip()
+            if date_text:
+                try:
+                    date_obj = datetime.strptime(date_text, "%d.%m.%Y")
+                except ValueError:
+                    messagebox.showerror("Ungültiges Datum", "Bitte Datum im Format TT.MM.JJJJ eingeben oder leer lassen.")
+                    try:
+                        date_entry.focus_set()
+                    except Exception:
+                        pass
+                    return
             desc = desc_text.get("1.0", "end").strip()
-            self.controller.add_task(title, desc, prio=prio_var.get(), faellig= date_obj)
+            try:
+                self.controller.add_task(title, desc, prio=prio_var.get(), faellig=date_obj)
+            except Exception:
+                messagebox.showerror("Fehler", "Aufgabe konnte nicht hinzugefügt werden.")
             win.destroy()
             self.refresh_board()
 
@@ -1181,58 +1289,68 @@ class DevPulsePlanner(tk.Tk):
         tk.Button(btn_row, text="➕ Hinzufügen", command=submit, font=("Segoe UI Bold", 9), bg=colors["btn_add"], fg="#FFFFFF", relief="flat", padx=12, pady=7, cursor="hand2").pack(side="right")
 
     def _add_demo_task(self):
-        self.controller.add_task("Demo-Aufgabe", "Diese Demo-Karte dient zum Testen der Scrollfunktion.", prio=3)
+        try:
+            self.controller.add_task("Demo-Aufgabe", "Diese Demo-Karte dient zum Testen der Scrollfunktion.", prio=3)
+        except Exception:
+            pass
         self.refresh_board()
 
     def _load_demo(self):
-        all_task_ids = list(self.controller.manager.aufgaben.keys())
-        for task_id in all_task_ids:
-            self.controller.manager.aufgabe_entfernen(task_id)
-        
-        self.controller.manager.geloescht.clear()
-        self.controller.manager.speichere_daten()
-        
-        self.controller.load_demo_data()
+        # Use controller API instead of poking into manager internals
+        try:
+            self.controller.load_demo_data()
+        except Exception:
+            # fallback: clear via controller if available
+            if hasattr(self.controller, "clear_all_tasks"):
+                try:
+                    self.controller.clear_all_tasks()
+                    self.controller.load_demo_data()
+                except Exception:
+                    pass
         self.refresh_board()
 
     def _get_date_display_color(self, task_id, date_str):
         colors = self.themes[self.current_theme]
-        
-        task = self._find_task_by_id(task_id)
-        if task and task.get_status() == "erledigt":
+        task = None
+        try:
+            task = getattr(self.controller, "get_task", lambda tid: None)(task_id)
+        except Exception:
+            task = None
+
+        if task and getattr(task, "get_status", lambda: None)() == "erledigt":
             return colors["text_sub"]
-        
+
         if date_str == "–":
             return colors["text_sub"]
-        
+
         try:
             task_date = datetime.strptime(date_str, "%d.%m.%Y").date()
             today = datetime.now().date()
-            
             if task_date < today:
                 return colors["tag_high"]
-            
             return colors["text_sub"]
         except ValueError:
             return colors["text_sub"]
 
     def _get_date_display_bg(self, task_id, date_str):
         colors = self.themes[self.current_theme]
-        
-        task = self._find_task_by_id(task_id)
-        if task and task.get_status() == "erledigt":
+        task = None
+        try:
+            task = getattr(self.controller, "get_task", lambda tid: None)(task_id)
+        except Exception:
+            task = None
+
+        if task and getattr(task, "get_status", lambda: None)() == "erledigt":
             return colors["card"]
-        
+
         if date_str == "–":
             return colors["card"]
-        
+
         try:
             task_date = datetime.strptime(date_str, "%d.%m.%Y").date()
             today = datetime.now().date()
-            
             if task_date < today:
                 return "#FFE5E5" if self.current_theme == "light" else "#3D1F1F"
-            
             return colors["card"]
         except ValueError:
             return colors["card"]

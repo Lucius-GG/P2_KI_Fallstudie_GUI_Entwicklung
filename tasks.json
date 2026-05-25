@@ -1,0 +1,30 @@
+{
+  "tasks": [
+    {
+      "id": "1",
+      "titel": "Setup Projekt",
+      "beschreibung": "Projektstruktur erstellen",
+      "prio": 5,
+      "faellig": null,
+      "status": "offen"
+    },
+    {
+      "id": "2",
+      "titel": "Datenmodell definieren",
+      "beschreibung": "Taskklasse, Manager, Controller",
+      "prio": 3,
+      "faellig": null,
+      "status": "offen"
+    },
+    {
+      "id": "3",
+      "titel": "GUI testen",
+      "beschreibung": "Drag/Drop und Suche prüfen",
+      "prio": 3,
+      "faellig": null,
+      "status": "offen"
+    }
+  ],
+  "geloescht": [],
+  "_next_id": 4
+}

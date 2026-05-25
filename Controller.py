@@ -1,116 +1,81 @@
-from Manager import AufgabenManager
-from ToDoListeKlassen import EinfacheAufgabe, TerminierteAufgabe
-from datetime import datetime, timedelta
-
+from Manager import TaskManager
+from datetime import datetime
+from typing import List
 
 class PlannerController:
-    """
-    Controller zwischen GUI und Business-Logic.
-    Verarbeitet alle Benutzeraktionen und aktualisiert Model + View.
-    """
-    
-    def __init__(self, view=None):
-        self.manager = AufgabenManager()
+    """Leichte Brücke GUI <-> Manager. Bietet stabilen API für GUI."""
+    def __init__(self, view=None, storage_path: str = None):
         self.view = view
-        
-    # ===== AUFGABEN ERSTELLEN =====
-    def add_task(self, titel: str, beschreibung: str, prio: int = 1, 
-                 faellig: datetime = None, wiederholend: bool = False) -> int:
-        """Fügt eine neue Aufgabe hinzu und gibt die ID zurück"""
-        aufgabe_id = max(self.manager.aufgaben.keys(), default=0) + 1
-        
-        if faellig or wiederholend:
-            aufgabe = TerminierteAufgabe(
-                aufgabe_id, titel, beschreibung, "offen", prio, faellig
-            )
-            if wiederholend:
-                aufgabe.set_wiederholung()
-        else:
-            aufgabe = EinfacheAufgabe(aufgabe_id, titel, beschreibung, "offen")
-        
-        self.manager.aufgabe_hinzufuegen(aufgabe)
-        
-        if self.view:
-            self.view.refresh_board()
-        
-        return aufgabe_id
-    
-    # ===== AUFGABEN VERWALTEN =====
-    def get_all_tasks(self) -> dict:
-        """Gibt alle Aufgaben zurück"""
-        return self.manager.aufgaben
-    
-    def get_tasks_by_status(self, status: str) -> list:
-        """Filtert Aufgaben nach Status"""
-        return self.manager.nach_status_filtern(status)
-    
-    def get_tasks_by_priority(self, prio: int) -> list:
-        """Filtert Aufgaben nach Priorität"""
-        return self.manager.nach_prioritaet_filtern(prio)
-    
-    def complete_task(self, task_id: int):
-        """Markiert eine Aufgabe als erledigt"""
-        self.manager.erledigt_setzen(task_id)
-        if self.view:
-            self.view.refresh_board()
+        self.manager = TaskManager(storage_path)
 
-    def bearbeitung_task(self, task_id: int):
-        """Markiert eine Aufgabe als bearbeitet"""
-        self.manager.bearbeitung_setzen(task_id)
-        if self.view:
-            self.view.refresh_board()
-
-    def delete_task(self, task_id: int):
-        """Löscht eine Aufgabe"""
-        self.manager.aufgabe_entfernen(task_id)
-        if self.view:
-            self.view.refresh_board()
-    
-    def restore_task(self, task_id: int):
-        """Stellt eine gelöschte Aufgabe wieder her"""
-        self.manager.aufgabe_wiederherstellen(task_id)
-        if self.view:
-            self.view.refresh_board()
-    
-    def set_priority(self, task_id: int, prio: int):
-        """Setzt die Priorität einer Aufgabe"""
-        self.manager.prioritaet_setzen(task_id, prio)
-        if self.view:
-            self.view.refresh_board()
-    
-    def set_deadline(self, task_id: int, datum: datetime):
-        """Setzt das Fälligkeitsdatum"""
-        self.manager.faelligkeit_setzen(task_id, datum)
-        if self.view:
-            self.view.refresh_board()
-    
-    # ===== FILTERUNG & SUCHE =====
-    def search_tasks(self, keyword: str) -> list:
-        """Sucht nach Aufgaben"""
-        return self.manager.suche(keyword)
-    
-    def filter_by_priority(self, prio: int) -> list:
-        """Filtert nach Priorität"""
-        return self.manager.nach_prioritaet_filtern(prio)
-    
-    # ===== DEMO-DATEN =====
     def load_demo_data(self):
-        """Lädt Demo-Aufgaben"""
-        self.manager.aufgabe_hinzufuegen(TerminierteAufgabe(
-            1, "GUI Refinement", "Logo auf Vektor-Basis umgestellt", 
-            "in_bearbeitung", 5, datetime.now()
-        ))
-        self.manager.aufgabe_hinzufuegen(TerminierteAufgabe(
-            2, "KI Fallstudie", "Integration der ToDoListeKlassen", 
-            "offen", 3, datetime(2026, 5, 29)
-        ))
-        self.manager.aufgabe_hinzufuegen(TerminierteAufgabe(
-            3, "DPI Bugfix", "High-DPI Awareness für Windows 11", 
-            "erledigt", 1, datetime.now() - timedelta(days=2)
-        ))
-        self.manager.aufgabe_hinzufuegen(TerminierteAufgabe(
-            4, "Testing", "Unit Tests für Manager schreiben", 
-            "offen", 3, datetime(2026, 6, 1)
-        ))
-        if self.view:
-            self.view.refresh_board()
+        # Leerer manager, dann Beispielaufgaben erzeugen
+        self.manager.aufgaben.clear()
+        self.manager.geloescht.clear()
+        self.manager._next_id = 1
+        self.manager.add_task("GUI Refinement", "Logo auf Vektor-Basis umgestellt", prio=5, faellig=datetime.fromisoformat("2026-05-24"), status="in_bearbeitung")
+        self.manager.add_task("KI Fallstudie", "Integration der ToDoListeKlassen", prio=3, faellig=datetime.fromisoformat("2026-05-29"), status="offen")
+        self.manager.add_task("DPI Bugfix", "High-DPI Awareness für Windows 11", prio=1, faellig=datetime.fromisoformat("2026-05-22"), status="erledigt")
+        self.manager.add_task("Testing", "Unit Tests für Manager schreiben", prio=3, faellig=datetime.fromisoformat("2026-06-01"), status="offen")
+        self.manager.add_task("hhdd", "dd", prio=3, faellig=datetime.fromisoformat("2026-05-22"), status="offen")
+
+        self.manager.speichere_daten()
+
+    def get_tasks_by_status(self, status: str):
+        return self.manager.get_tasks_by_status(status)
+
+    def get_task(self, task_id: str):
+        return self.manager.get_task(task_id)
+
+    def get_all_tasks(self) -> List:
+        return list(self.manager.aufgaben.values())
+
+    def search_tasks(self, query: str):
+        q = (query or "").strip().lower()
+        if not q:
+            return self.get_all_tasks()
+        out = []
+        for t in self.get_all_tasks():
+            titel = getattr(t, "get_titel", lambda: "")()
+            besch = getattr(t, "get_beschreibung", lambda: "")() or ""
+            if q in titel.lower() or q in besch.lower():
+                out.append(t)
+        return out
+
+    def get_overdue_count(self) -> int:
+        today = datetime.now().date()
+        c = 0
+        for status in ("offen", "in_bearbeitung"):
+            for t in self.get_tasks_by_status(status):
+                fd = getattr(t, "get_faelligkeitsdatum", lambda: None)()
+                if fd and fd.date() < today:
+                    c += 1
+        return c
+
+    def add_task(self, titel: str, beschreibung: str = "", prio: int = 3, faellig: datetime = None):
+        return self.manager.add_task(titel, beschreibung, prio, faellig, status="offen")
+
+    def delete_task(self, task_id: str):
+        return self.manager.aufgabe_entfernen(task_id)
+
+    def complete_task(self, task_id: str):
+        return self.manager.complete_task(task_id)
+
+    def bearbeitung_task(self, task_id: str):
+        return self.manager.bearbeitung_task(task_id)
+
+    def move_task(self, task_id: str, target_status: str):
+        return self.manager.move_task(task_id, target_status)
+
+    def clear_all_tasks(self):
+        self.manager.aufgaben.clear()
+        self.manager.geloescht.clear()
+        self.manager._next_id = 1
+        self.manager.speichere_daten()
+
+    def save(self):
+        return self.manager.speichere_daten()
+
+    # Backwards compatibility helpers (GUI erwartete Namen)
+    def speichere_daten(self):
+        return self.save()
