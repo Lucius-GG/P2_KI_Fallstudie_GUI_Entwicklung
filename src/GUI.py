@@ -287,7 +287,11 @@ class DevPulsePlanner(tk.Tk):
 
         # Fenster-Icon setzen - lädt Logo.png oder nutzt Canvas-Fallback
         try:
-            icon_image = Image.open("Logo.png")
+            # WICHTIG: Berechne Pfad relativ zu dieser Datei (GUI.py)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            logo_path = os.path.join(script_dir, "Logo.png")
+            
+            icon_image = Image.open(logo_path)
             self.app_icon = ImageTk.PhotoImage(icon_image)
             self.iconphoto(False, self.app_icon)
         except Exception as e:
@@ -521,8 +525,12 @@ class DevPulsePlanner(tk.Tk):
         colors = self.themes[self.current_theme]
         
         try:
+            # Berechne Pfad relativ zur aktuellen Datei
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            logo_path = os.path.join(script_dir, "Logo.png")
+            
             # Bild laden und auf exakte Größe (32x32 Pixel) skalieren
-            img = Image.open("Logo.png").resize((32, 32), Image.Resampling.LANCZOS)
+            img = Image.open(logo_path).resize((32, 32), Image.Resampling.LANCZOS)
             
             # WICHTIG: Die Referenz an 'self' binden, da Tkinter das Bild sonst 
             # sofort wieder aus dem Arbeitsspeicher löscht (Garbage Collection)!
