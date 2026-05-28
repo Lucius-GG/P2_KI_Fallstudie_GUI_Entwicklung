@@ -836,7 +836,7 @@ class DevPulsePlanner(tk.Tk):
             return
 
         raw = self.search_var.get().strip() if hasattr(self, "search_var") else ""
-        if raw.lower() == "suchen…":
+        if raw.lower() in ("suchen…", "suchen...", "search…", "search...") or not raw:
             raw = ""
         query = raw.strip()
 
