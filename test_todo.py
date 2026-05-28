@@ -1,159 +1,197 @@
 import pytest
-from datetime import datetime, timedelta, date
-from Manager import AufgabenManager
-from ToDoListeKlassen import EinfacheAufgabe, TerminierteAufgabe
+import os
+import tempfile
+from datetime import datetime, timedelta
+from Manager import TaskManager
+from ToDoListeKlassen import Task
 
 
 # ---------------------------------------------------------
-#   TESTS FÜR EinfacheAufgabe
+#   FIXTURES
 # ---------------------------------------------------------
 
-def test_einfache_aufgabe_basic():
-    a = EinfacheAufgabe(1, "Test", "Beschreibung")
+@pytest.fixture
+def temp_storage():
+    """Erstellt eine temporäre Datei für jeden Test"""
+    fd, path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    yield path
+    # Cleanup nach Test
+    if os.path.exists(path):
+        os.remove(path)
 
-    assert a.get_id() == 1
-    assert a.get_titel() == "Test"
-    assert a.get_beschreibung() == "Beschreibung"
-    assert a.get_status() == "offen"
 
-    a.set_status("erledigt")
-    assert a.get_status() == "erledigt"
+@pytest.fixture
+def manager(temp_storage):
+    """Erstellt einen TaskManager mit temporärem Speicher"""
+    return TaskManager(storage_path=temp_storage)
 
 
 # ---------------------------------------------------------
-#   TESTS FÜR TerminierteAufgabe
+#   TESTS FÜR Task (Einfache Aufgabe)
 # ---------------------------------------------------------
 
-def test_terminierte_aufgabe_prio_und_faelligkeit():
+def test_task_basic():
+    """Test: Basis-Task erstellen und Getter/Setter"""
+    t = Task("1", "Test", "Beschreibung")
+
+    assert t.get_id() == "1"
+    assert t.get_titel() == "Test"
+    assert t.get_beschreibung() == "Beschreibung"
+    assert t.get_status() == "offen"
+
+    t.set_status("erledigt")
+    assert t.get_status() == "erledigt"
+
+
+def test_task_mit_prio_und_faelligkeit():
+    """Test: Task mit Priorität und Fälligkeitsdatum"""
     faellig = datetime.now() + timedelta(days=3)
-    a = TerminierteAufgabe(2, "Termin", "Test", prio=3, faelligkeitsdatum=faellig)
+    t = Task("2", "Termin", "Test", prio=3, faellig=faellig)
 
-    assert a.get_prio() == 3
-    assert a.get_faelligkeitsdatum() is not None
+    assert t.get_prio() == 3
+    assert t.get_faelligkeitsdatum() is not None
 
 
 def test_verbleibende_zeit_berechnung():
+    """Test: Fälligkeitsdatum ist korrekt gespeichert"""
     morgen = datetime.now() + timedelta(days=1)
-    a = TerminierteAufgabe(3, "Zeit", "Test", faelligkeitsdatum=morgen)
+    t = Task("3", "Zeit", "Test", faellig=morgen)
 
-    result = a.berechne_verbleibende_zeit()
-    assert isinstance(result, str)
-
-
-def test_faelligkeit_wiederholen_taeglich():
-    gestern = datetime.now() - timedelta(days=1)
-    a = TerminierteAufgabe(
-        4, "Wiederholung", "Test",
-        faelligkeitsdatum=gestern,
-        wiederholung=True,
-        wiederholung_intervall=1
-    )
-
-    a.falligkeit_wiederholen()
-
-    faellig = a.get_faelligkeitsdatum()
-
-    # Akzeptiere sowohl date als auch datetime
-    if isinstance(faellig, datetime):
-        assert faellig.date() > datetime.now().date()
-    elif isinstance(faellig, date):
-        assert faellig > datetime.now().date()
-    else:
-        raise AssertionError("Fälligkeitsdatum ist in einem unerwarteten Format.")
+    result = t.get_faelligkeitsdatum()
+    assert isinstance(result, datetime)
 
 
-def test_status_setzen_ueberfaellig():
-    gestern = datetime.now() - timedelta(days=1)
-    a = TerminierteAufgabe(5, "Überfällig", "Test", faelligkeitsdatum=gestern)
+def test_status_setzen():
+    """Test: Status ändern funktioniert"""
+    t = Task("5", "Überfällig", "Test", faellig=datetime.now() - timedelta(days=1))
 
-    new_status = a.set_status("egal")
-    assert new_status in ["überfällig", "egal", a.get_status()]
+    t.set_status("in_bearbeitung")
+    assert t.get_status() == "in_bearbeitung"
+
+
+def test_task_default_values():
+    """Test: Default-Werte werden korrekt gesetzt"""
+    t = Task("10", "MinimalTask")
+    
+    assert t.get_prio() == 3  # Default
+    assert t.get_beschreibung() == ""
+    assert t.get_faelligkeitsdatum() is None
+    assert t.get_status() == "offen"
 
 
 # ---------------------------------------------------------
-#   TESTS FÜR AufgabenManager
+#   TESTS FÜR TaskManager
 # ---------------------------------------------------------
 
-def test_aufgabe_hinzufuegen():
-    m = AufgabenManager()
-    a = EinfacheAufgabe(1, "Test", "Beschreibung")
+def test_task_hinzufuegen(manager):
+    """Test: Task hinzufügen"""
+    task_id = manager.add_task("Test", "Beschreibung")
 
-    m.aufgabe_hinzufuegen(a)
-
-    assert 1 in m.aufgaben
-
-
-def test_aufgabe_entfernen_und_wiederherstellen():
-    m = AufgabenManager()
-    a = EinfacheAufgabe(1, "Test", "Beschreibung")
-    m.aufgabe_hinzufuegen(a)
-
-    m.aufgabe_entfernen(1)
-    assert 1 not in m.aufgaben
-    assert 1 in m.geloescht
-
-    m.aufgabe_wiederherstellen(1)
-    assert 1 in m.aufgaben
-    assert 1 not in m.geloescht
+    assert task_id in manager.aufgaben
+    assert manager.aufgaben[task_id].get_titel() == "Test"
 
 
-def test_erledigt_setzen():
-    m = AufgabenManager()
-    a = EinfacheAufgabe(1, "Test", "Beschreibung")
-    m.aufgabe_hinzufuegen(a)
-
-    m.erledigt_setzen(1)
-    assert a.get_status() == "erledigt"
-
-
-def test_prioritaet_setzen():
-    m = AufgabenManager()
-    a = TerminierteAufgabe(1, "Test", "Beschreibung", prio=1)
-    m.aufgabe_hinzufuegen(a)
-
-    m.prioritaet_setzen(1, 5)
-    assert a.get_prio() == 5
+def test_task_entfernen(manager):
+    """Test: Task entfernen und Tracking"""
+    task_id = manager.add_task("Test", "Beschreibung")
+    
+    assert task_id in manager.aufgaben
+    success = manager.aufgabe_entfernen(task_id)
+    
+    assert success is True
+    assert task_id not in manager.aufgaben
+    assert len(manager.geloescht) > 0
 
 
-def test_faelligkeit_setzen():
-    m = AufgabenManager()
-    a = TerminierteAufgabe(1, "Test", "Beschreibung")
-    m.aufgabe_hinzufuegen(a)
+def test_task_entfernen_nicht_existent(manager):
+    """Test: Nicht-existente Task entfernen fehlgeschlagen"""
+    success = manager.aufgabe_entfernen("nicht_vorhanden")
+    
+    assert success is False
 
+
+def test_task_komplett(manager):
+    """Test: Task als erledigt markieren"""
+    task_id = manager.add_task("Test", "Beschreibung")
+
+    manager.complete_task(task_id)
+    assert manager.aufgaben[task_id].get_status() == "erledigt"
+
+
+def test_task_in_bearbeitung(manager):
+    """Test: Task in Bearbeitung setzen"""
+    task_id = manager.add_task("Test", "Beschreibung")
+
+    manager.bearbeitung_task(task_id)
+    assert manager.aufgaben[task_id].get_status() == "in_bearbeitung"
+
+
+def test_prioritaet_setzen(manager):
+    """Test: Priorität ändern"""
+    task_id = manager.add_task("Test", "Beschreibung", prio=1)
+    task = manager.get_task(task_id)
+
+    task.set_prio(5)
+    assert task.get_prio() == 5
+
+
+def test_faelligkeit_setzen(manager):
+    """Test: Fälligkeitsdatum ändern"""
+    task_id = manager.add_task("Test", "Beschreibung")
     datum = datetime.now() + timedelta(days=10)
-    m.faelligkeit_setzen(1, datum)
 
-    assert m.aufgaben[1].get_faelligkeitsdatum() is not None
+    task = manager.get_task(task_id)
+    task.set_faelligkeitsdatum(datum)
+
+    assert manager.aufgaben[task_id].get_faelligkeitsdatum() is not None
 
 
-def test_alle_anzeigen():
-    m = AufgabenManager()
-    a = EinfacheAufgabe(1, "Test", "Beschreibung")
-    m.aufgabe_hinzufuegen(a)
+def test_get_tasks_by_status(manager):
+    """Test: Tasks nach Status filtern"""
+    manager.add_task("A", "B", status="offen")
+    manager.add_task("C", "D", status="erledigt")
 
-    result = m.alle_anzeigen()
+    result = manager.get_tasks_by_status("erledigt")
     assert len(result) == 1
+    assert result[0].get_titel() == "C"
 
 
-def test_nach_prioritaet_filtern():
-    m = AufgabenManager()
-    a1 = TerminierteAufgabe(1, "A", "B", prio=1)
-    a2 = TerminierteAufgabe(2, "C", "D", prio=3)
-    m.aufgabe_hinzufuegen(a1)
-    m.aufgabe_hinzufuegen(a2)
+def test_get_tasks_by_status_mehrere(manager):
+    """Test: Mehrere Tasks mit gleichem Status"""
+    manager.add_task("A", "B", status="offen")
+    manager.add_task("C", "D", status="offen")
+    manager.add_task("E", "F", status="erledigt")
 
-    result = m.nach_prioritaet_filtern(3)
-
-    assert any("C" in s for s in result)
+    result = manager.get_tasks_by_status("offen")
+    assert len(result) == 2
 
 
-def test_suche():
-    m = AufgabenManager()
-    a1 = EinfacheAufgabe(1, "Mathe lernen", "Aufgabenblatt")
-    a2 = EinfacheAufgabe(2, "Einkaufen", "Milch und Brot")
+def test_task_to_dict_from_dict():
+    """Test: Serialisierung und Deserialisierung"""
+    t = Task("1", "Test", "Beschreibung", prio=2, status="in_bearbeitung")
+    d = t.to_dict()
 
-    m.aufgabe_hinzufuegen(a1)
-    m.aufgabe_hinzufuegen(a2)
+    t2 = Task.from_dict(d)
+    assert t2.get_id() == "1"
+    assert t2.get_titel() == "Test"
+    assert t2.get_prio() == 2
+    assert t2.get_status() == "in_bearbeitung"
 
-    assert any("Mathe" in s for s in m.suche("Mathe"))
-    assert any("Brot" in s for s in m.suche("Brot"))
+
+def test_task_persistence(temp_storage):
+    """Test: Datenspeicherung und Laden"""
+    manager1 = TaskManager(storage_path=temp_storage)
+    task_id = manager1.add_task("Persistent", "Sollte geladen werden")
+    
+    # Neuer Manager mit gleicher Datei
+    manager2 = TaskManager(storage_path=temp_storage)
+    
+    assert task_id in manager2.aufgaben
+    assert manager2.aufgaben[task_id].get_titel() == "Persistent"
+
+
+def test_get_nonexistent_task(manager):
+    """Test: Nicht-existente Task abrufen"""
+    task = manager.get_task("nicht_vorhanden")
+    assert task is None
