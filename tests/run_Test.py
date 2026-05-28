@@ -6,7 +6,7 @@ def run_tests():
     """Führt Tests aus ohne HTML-Report"""
     
     print("=" * 70)
-    print("🧪 TO-DO-LISTEN TEST SUITE")
+    print("TO-DO-LISTEN TEST SUITE")
     print("=" * 70)
     print(f"Startzeit: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
     print()
@@ -19,7 +19,7 @@ def run_tests():
         print("Installation: pip install pytest")
         sys.exit(1)
     
-    print("📋 Führe Tests aus...\n")
+    print("Fuehre Tests aus...\n")
     
     # Führe Tests aus OHNE HTML-Report
     result = subprocess.run(
@@ -30,9 +30,9 @@ def run_tests():
     print("\n" + "=" * 70)
     
     if result.returncode == 0:
-        print("✅ ALLE TESTS BESTANDEN!")
+        print("ALLE TESTS BESTANDEN!")
     else:
-        print("❌ EINIGE TESTS FEHLGESCHLAGEN!")
+        print("EINIGE TESTS FEHLGESCHLAGEN!")
     
     print("=" * 70)
     print(f"Endzeit: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
