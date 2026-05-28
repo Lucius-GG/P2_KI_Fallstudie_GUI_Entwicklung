@@ -39,16 +39,8 @@
       "prio": 3,
       "faellig": "2026-05-22T00:00:00",
       "status": "offen"
-    },
-    {
-      "id": "6",
-      "titel": "dsf",
-      "beschreibung": "dsf",
-      "prio": 3,
-      "faellig": null,
-      "status": "offen"
     }
   ],
   "geloescht": [],
-  "_next_id": 7
+  "_next_id": 6
 }

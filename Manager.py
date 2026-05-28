@@ -27,12 +27,21 @@ class TaskManager:
         return tid
 
     def aufgabe_entfernen(self, task_id: str) -> bool:
-        if task_id in self.aufgaben:
-            self.aufgaben.pop(task_id)
-            self.geloescht.append(task_id)
-            self.speichere_daten()
-            return True
-        return False
+        task = self.aufgaben.pop(str(task_id), None)
+        if not task:
+            return False
+
+        # Einfach: wenn möglich to_dict nutzen, sonst __dict__ oder repr speichern
+        if hasattr(task, "to_dict") and callable(task.to_dict):
+            record = task.to_dict()
+        else:
+            record = getattr(task, "__dict__", {"id": str(task_id)})
+            if not isinstance(record, dict):
+                record = {"id": str(task_id), "repr": repr(task)}
+
+        self.geloescht.append(record)
+        self.speichere_daten()
+        return True
 
     def get_task(self, task_id: str):
         return self.aufgaben.get(str(task_id))
