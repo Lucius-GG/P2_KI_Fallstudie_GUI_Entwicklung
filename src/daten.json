@@ -1,0 +1,46 @@
+{
+  "tasks": [
+    {
+      "id": "1",
+      "titel": "GUI Refinement",
+      "beschreibung": "Logo auf Vektor-Basis umgestellt",
+      "prio": 5,
+      "faellig": "2026-05-24T00:00:00",
+      "status": "in_bearbeitung"
+    },
+    {
+      "id": "2",
+      "titel": "KI Fallstudie",
+      "beschreibung": "Integration der ToDoListeKlassen",
+      "prio": 3,
+      "faellig": "2026-05-29T00:00:00",
+      "status": "offen"
+    },
+    {
+      "id": "3",
+      "titel": "DPI Bugfix",
+      "beschreibung": "High-DPI Awareness für Windows 11",
+      "prio": 1,
+      "faellig": "2026-05-22T00:00:00",
+      "status": "erledigt"
+    },
+    {
+      "id": "4",
+      "titel": "Testing",
+      "beschreibung": "Unit Tests für Manager schreiben",
+      "prio": 3,
+      "faellig": "2026-06-01T00:00:00",
+      "status": "offen"
+    },
+    {
+      "id": "5",
+      "titel": "hhdd",
+      "beschreibung": "dd",
+      "prio": 3,
+      "faellig": "2026-05-22T00:00:00",
+      "status": "offen"
+    }
+  ],
+  "geloescht": [],
+  "_next_id": 6
+}
