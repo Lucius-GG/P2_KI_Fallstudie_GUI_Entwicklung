@@ -1,7 +1,12 @@
 import pytest
 import os
+import sys
 import tempfile
 from datetime import datetime, timedelta
+
+# Fügt den übergeordneten Ordner zum Python-Suchpfad hinzu
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from src.Manager import TaskManager
 from src.ToDoListeKlassen import Task
 
@@ -28,7 +33,7 @@ def manager(temp_storage):
 
 
 # ---------------------------------------------------------
-#   TESTS FÜR Task (Einfache Aufgabe)
+#   TESTS FÜR Task
 # ---------------------------------------------------------
 
 def test_task_basic():

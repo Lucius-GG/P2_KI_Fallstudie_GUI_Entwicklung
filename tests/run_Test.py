@@ -23,7 +23,7 @@ def run_tests():
     
     # Führe Tests aus OHNE HTML-Report
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "test_todo.py", "-v", "--tb=short"],
+        [sys.executable, "-m", "pytest", "tests/test_todo.py", "-v", "--tb=short"],
         text=True
     )
     
@@ -36,8 +36,8 @@ def run_tests():
     
     print("=" * 70)
     print(f"Endzeit: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}")
-    
     return result.returncode
+    
 
 if __name__ == "__main__":
     sys.exit(run_tests())
