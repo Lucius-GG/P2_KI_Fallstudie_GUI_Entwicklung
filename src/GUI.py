@@ -551,9 +551,9 @@ class DevPulsePlanner(tk.Tk):
         # Der Text "DevPulse" daneben
         name = tk.Frame(parent, bg=colors["sidebar_top"])
         name.pack(side="left")
-        tk.Label(name, text="Dev", font=("Segoe UI Black", 15),
+        tk.Label(name, text="Dev", font=("Segoe UI Black", 12),
                  bg=colors["sidebar_top"], fg=colors["accent"]).pack(side="left")
-        tk.Label(name, text="Pulse Planner", font=("Segoe UI Semibold", 15),
+        tk.Label(name, text="Pulse Planner", font=("Segoe UI Semibold", 12),
                  bg=colors["sidebar_top"], fg="#FFFFFF").pack(side="left")
 
     # === Navigationsmenü bauen ===
